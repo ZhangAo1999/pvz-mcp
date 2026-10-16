@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "supported": [
+    {
+      "sha256": "e1511201ec2ae9a7e30259f04bc2ec7272badb2574a2e9b405d0e916ae5c082c",
+      "version": "1.2.0.1073"
+    }
+  ],
+  "unsupported": [
+    {
+      "sha256": "678016e417cd55f1f19d7eabb6f2b7e6b87146be107db1179a61985078004f7a",
+      "version": "1.0.0.1051"
+    }
+  ]
+}

@@ -1,0 +1,541 @@
+{
+  "provenance": {
+    "target_version": "1.2.0.1073",
+    "target_sha256": "e1511201ec2ae9a7e30259f04bc2ec7272badb2574a2e9b405d0e916ae5c082c",
+    "source": "PlantsVsZombies.exe",
+    "table_source": "definition-tables.json",
+    "decoder_evidence": [
+      "mechanics-code\\0x428500.c",
+      "mechanics-code\\0x428560.c",
+      "mechanics-code\\0x4285c0.c",
+      "mechanics-code\\0x428620.c",
+      "mechanics-code\\0x428680.c",
+      "mechanics-code\\0x4275a0.c",
+      "mechanics-code\\0x4276d0.c",
+      "mechanics-code\\0x49cdc0.c",
+      "toolset-cards-asm.json",
+      "mechanics-code\\0x419d00.c",
+      "mechanics-code\\0x466630.c"
+    ],
+    "notes": [
+      "Plant names and base cost/recharge values come from the verified definition table. Zombie names come from the named zombie table. Projectile names remain numeric because the source table does not contain names.",
+      "This decoder does not change the executable and does not claim arbitrary versions are compatible."
+    ]
+  },
+  "plants": [
+    {
+      "type": 0,
+      "name": "PEASHOOTER",
+      "base_cost": 100,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 1,
+      "name": "SUNFLOWER",
+      "base_cost": 50,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 2,
+      "name": "CHERRY_BOMB",
+      "base_cost": 150,
+      "base_recharge_updates": 5000
+    },
+    {
+      "type": 3,
+      "name": "WALL_NUT",
+      "base_cost": 50,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 4,
+      "name": "POTATO_MINE",
+      "base_cost": 25,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 5,
+      "name": "SNOW_PEA",
+      "base_cost": 175,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 6,
+      "name": "CHOMPER",
+      "base_cost": 150,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 7,
+      "name": "REPEATER",
+      "base_cost": 200,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 8,
+      "name": "PUFF_SHROOM",
+      "base_cost": 0,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 9,
+      "name": "SUN_SHROOM",
+      "base_cost": 25,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 10,
+      "name": "FUME_SHROOM",
+      "base_cost": 75,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 11,
+      "name": "GRAVE_BUSTER",
+      "base_cost": 75,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 12,
+      "name": "HYPNO_SHROOM",
+      "base_cost": 75,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 13,
+      "name": "SCAREDY_SHROOM",
+      "base_cost": 25,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 14,
+      "name": "ICE_SHROOM",
+      "base_cost": 75,
+      "base_recharge_updates": 5000
+    },
+    {
+      "type": 15,
+      "name": "DOOM_SHROOM",
+      "base_cost": 125,
+      "base_recharge_updates": 5000
+    },
+    {
+      "type": 16,
+      "name": "LILY_PAD",
+      "base_cost": 25,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 17,
+      "name": "SQUASH",
+      "base_cost": 50,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 18,
+      "name": "THREEPEATER",
+      "base_cost": 325,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 19,
+      "name": "TANGLE_KELP",
+      "base_cost": 25,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 20,
+      "name": "JALAPENO",
+      "base_cost": 125,
+      "base_recharge_updates": 5000
+    },
+    {
+      "type": 21,
+      "name": "SPIKEWEED",
+      "base_cost": 100,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 22,
+      "name": "TORCHWOOD",
+      "base_cost": 175,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 23,
+      "name": "TALL_NUT",
+      "base_cost": 125,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 24,
+      "name": "SEA_SHROOM",
+      "base_cost": 0,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 25,
+      "name": "PLANTERN",
+      "base_cost": 25,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 26,
+      "name": "CACTUS",
+      "base_cost": 125,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 27,
+      "name": "BLOVER",
+      "base_cost": 100,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 28,
+      "name": "SPLIT_PEA",
+      "base_cost": 125,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 29,
+      "name": "STARFRUIT",
+      "base_cost": 125,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 30,
+      "name": "PUMPKIN",
+      "base_cost": 125,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 31,
+      "name": "MAGNET_SHROOM",
+      "base_cost": 100,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 32,
+      "name": "CABBAGE_PULT",
+      "base_cost": 100,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 33,
+      "name": "FLOWER_POT",
+      "base_cost": 25,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 34,
+      "name": "KERNEL_PULT",
+      "base_cost": 100,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 35,
+      "name": "COFFEE_BEAN",
+      "base_cost": 75,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 36,
+      "name": "GARLIC",
+      "base_cost": 50,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 37,
+      "name": "UMBRELLA_LEAF",
+      "base_cost": 100,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 38,
+      "name": "MARIGOLD",
+      "base_cost": 50,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 39,
+      "name": "MELON_PULT",
+      "base_cost": 300,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 40,
+      "name": "GATLING_PEA",
+      "base_cost": 250,
+      "base_recharge_updates": 5000
+    },
+    {
+      "type": 41,
+      "name": "TWIN_SUNFLOWER",
+      "base_cost": 150,
+      "base_recharge_updates": 5000
+    },
+    {
+      "type": 42,
+      "name": "GLOOM_SHROOM",
+      "base_cost": 150,
+      "base_recharge_updates": 5000
+    },
+    {
+      "type": 43,
+      "name": "CATTAIL",
+      "base_cost": 225,
+      "base_recharge_updates": 5000
+    },
+    {
+      "type": 44,
+      "name": "WINTER_MELON",
+      "base_cost": 200,
+      "base_recharge_updates": 5000
+    },
+    {
+      "type": 45,
+      "name": "GOLD_MAGNET",
+      "base_cost": 50,
+      "base_recharge_updates": 5000
+    },
+    {
+      "type": 46,
+      "name": "SPIKEROCK",
+      "base_cost": 125,
+      "base_recharge_updates": 5000
+    },
+    {
+      "type": 47,
+      "name": "COB_CANNON",
+      "base_cost": 500,
+      "base_recharge_updates": 5000
+    },
+    {
+      "type": 48,
+      "name": "IMITATER",
+      "base_cost": 0,
+      "base_recharge_updates": 750
+    },
+    {
+      "type": 49,
+      "name": "EXPLODE_O_NUT",
+      "base_cost": 0,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 50,
+      "name": "GIANT_WALLNUT",
+      "base_cost": 0,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 51,
+      "name": "SPROUT",
+      "base_cost": 0,
+      "base_recharge_updates": 3000
+    },
+    {
+      "type": 52,
+      "name": "REPEATER",
+      "base_cost": 200,
+      "base_recharge_updates": 750
+    }
+  ],
+  "zombies": [
+    {
+      "type": 0,
+      "name": "ZOMBIE"
+    },
+    {
+      "type": 1,
+      "name": "FLAG_ZOMBIE"
+    },
+    {
+      "type": 2,
+      "name": "CONEHEAD_ZOMBIE"
+    },
+    {
+      "type": 3,
+      "name": "POLE_VAULTING_ZOMBIE"
+    },
+    {
+      "type": 4,
+      "name": "BUCKETHEAD_ZOMBIE"
+    },
+    {
+      "type": 5,
+      "name": "NEWSPAPER_ZOMBIE"
+    },
+    {
+      "type": 6,
+      "name": "SCREEN_DOOR_ZOMBIE"
+    },
+    {
+      "type": 7,
+      "name": "FOOTBALL_ZOMBIE"
+    },
+    {
+      "type": 8,
+      "name": "DANCING_ZOMBIE"
+    },
+    {
+      "type": 9,
+      "name": "BACKUP_DANCER"
+    },
+    {
+      "type": 10,
+      "name": "DUCKY_TUBE_ZOMBIE"
+    },
+    {
+      "type": 11,
+      "name": "SNORKEL_ZOMBIE"
+    },
+    {
+      "type": 12,
+      "name": "ZOMBONI"
+    },
+    {
+      "type": 13,
+      "name": "ZOMBIE_BOBSLED_TEAM"
+    },
+    {
+      "type": 14,
+      "name": "DOLPHIN_RIDER_ZOMBIE"
+    },
+    {
+      "type": 15,
+      "name": "JACK_IN_THE_BOX_ZOMBIE"
+    },
+    {
+      "type": 16,
+      "name": "BALLOON_ZOMBIE"
+    },
+    {
+      "type": 17,
+      "name": "DIGGER_ZOMBIE"
+    },
+    {
+      "type": 18,
+      "name": "POGO_ZOMBIE"
+    },
+    {
+      "type": 19,
+      "name": "ZOMBIE_YETI"
+    },
+    {
+      "type": 20,
+      "name": "BUNGEE_ZOMBIE"
+    },
+    {
+      "type": 21,
+      "name": "LADDER_ZOMBIE"
+    },
+    {
+      "type": 22,
+      "name": "CATAPULT_ZOMBIE"
+    },
+    {
+      "type": 23,
+      "name": "GARGANTUAR"
+    },
+    {
+      "type": 24,
+      "name": "IMP"
+    },
+    {
+      "type": 25,
+      "name": "BOSS"
+    },
+    {
+      "type": 26,
+      "name": "ZOMBIE"
+    },
+    {
+      "type": 27,
+      "name": "ZOMBIE"
+    },
+    {
+      "type": 28,
+      "name": "ZOMBIE"
+    },
+    {
+      "type": 29,
+      "name": "ZOMBIE"
+    },
+    {
+      "type": 30,
+      "name": "ZOMBIE"
+    },
+    {
+      "type": 31,
+      "name": "ZOMBIE"
+    },
+    {
+      "type": 32,
+      "name": "REDEYED_GARGANTUAR"
+    },
+    {
+      "type": 33,
+      "name": "ZOMBATAR_FLAG_ZOMBIE"
+    }
+  ],
+  "projectiles": [
+    {
+      "type": 0,
+      "name": "PROJECTILE_0"
+    },
+    {
+      "type": 1,
+      "name": "PROJECTILE_1"
+    },
+    {
+      "type": 2,
+      "name": "PROJECTILE_2"
+    },
+    {
+      "type": 3,
+      "name": "PROJECTILE_3"
+    },
+    {
+      "type": 4,
+      "name": "PROJECTILE_4"
+    },
+    {
+      "type": 5,
+      "name": "PROJECTILE_5"
+    },
+    {
+      "type": 6,
+      "name": "PROJECTILE_6"
+    },
+    {
+      "type": 7,
+      "name": "PROJECTILE_7"
+    },
+    {
+      "type": 8,
+      "name": "PROJECTILE_8"
+    },
+    {
+      "type": 9,
+      "name": "PROJECTILE_9"
+    },
+    {
+      "type": 10,
+      "name": "PROJECTILE_10"
+    },
+    {
+      "type": 11,
+      "name": "PROJECTILE_11"
+    },
+    {
+      "type": 12,
+      "name": "PROJECTILE_12"
+    },
+    {
+      "type": 13,
+      "name": "PROJECTILE_13"
+    }
+  ]
+}

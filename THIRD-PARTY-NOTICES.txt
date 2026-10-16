@@ -1,0 +1,26 @@
+This package contains no Plants vs. Zombies executable, archive, image, sound,
+user save, activation material, or DRM workaround. Users supply their own game.
+Plants vs. Zombies / PopCap / EA names identify interoperability targets only.
+This is an unofficial project with no affiliation or endorsement.
+
+Offline Windows packages bundle Python 3.8 and Node.js 24 from the local build
+environment. Their full licenses are under runtime/python/LICENSE.txt and
+runtime/node/LICENSE. Tcl/Tk notices remain under runtime/python/tcl.
+
+MCP TypeScript SDK 2.3.1: Apache-2.0; Zod 4.4.3: MIT.
+The exact dependency versions and declared licenses are recorded in
+dependency-versions.json. Every bundled module retains its own license files.
+Third-party runtime and library licenses remain applicable separately from MIT.
+
+Source archives do not bundle runtimes or node_modules. Set PVZ_PYTHON to an
+installed Windows Python with tkinter, and PVZ_SDK_ROOT to an installed SDK
+dependency root with the versions listed above.
+
+Open source distribution of a tool does not grant permission under a game's
+EULA, trademarks, or applicable law. EA's general terms restrict unauthorized
+modification and reverse engineering subject to authorization/legal exceptions.
+The terms applicable to a specific user's copy may differ. No legal clearance
+or blanket compatibility claim is made by this project.
+References checked 2026-10-16:
+https://www.ea.com/legal/user-agreement
+https://help.ea.com/en/articles/security-and-rules/ea-content-policy/

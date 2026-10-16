@@ -1,0 +1,2333 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "target_version": "1.2.0.1073",
+    "target_sha256": "e1511201ec2ae9a7e30259f04bc2ec7272badb2574a2e9b405d0e916ae5c082c",
+    "executable": "PlantsVsZombies.exe",
+    "localization": "LawnStrings.txt.utf8.txt",
+    "localization_sha256": "0a266e35858387dcb3b024830c87fb0aa5e38cef64e812a1408f920fd9136e95",
+    "method": "Read-only PE section mapping, exact 72-record native mode table, pointed-to ASCII keys and matching extracted Chinese localization. Mode 0 and runtime field semantics come from native control flow.",
+    "evidence_root": "PlantsVsZombies",
+    "caution": "Catalog membership, localization and ID mapping are verified statically. No mode is declared unlocked or tested for direct start by this catalog."
+  },
+  "native_table": {
+    "base_va": "0x74e490",
+    "stride": 24,
+    "count": 72,
+    "id_range": [
+      1,
+      72
+    ],
+    "field_offsets": {
+      "id": 0,
+      "icon_index_raw": 4,
+      "page_raw": 8,
+      "row_raw": 12,
+      "col_raw": 16,
+      "title_ascii_pointer": 20
+    },
+    "boundary_va": "0x74eb50",
+    "boundary_first_dword": "0xffffffff",
+    "non_table_mode": 0,
+    "page_categories": {
+      "0": "survival",
+      "1": "minigames",
+      "2": "hidden/garden/internal",
+      "3": "puzzles"
+    },
+    "page_note": "Page values and coordinates are native raw table data; category labels follow the associated localization keys."
+  },
+  "app_layout": {
+    "root_pointer_global_va": "0x755e0c",
+    "fields": {
+      "board_pointer": "0x868",
+      "title_screen_pointer": "0x86c",
+      "main_menu_pointer": "0x870",
+      "seed_chooser_pointer": "0x874",
+      "award_screen_pointer": "0x878",
+      "credits_pointer": "0x87c",
+      "challenge_screen_pointer": "0x880",
+      "mode": "0x91c",
+      "scene": "0x920",
+      "profile_pointer": "0x950"
+    },
+    "status_note": "These are App fields and remain readable when no Board exists, provided the verified process and root pointer remain valid.",
+    "evidence": [
+      "menu native analysis: 45c4a0 creates main menu, 45c5d0 award, 45c740 scene6 widget, 45c840 challenge screen",
+      "mechanics-code/0x413930.c Board App ownership",
+      "mechanics-code/0x475fe0.c root+mode reads"
+    ]
+  },
+  "profile_layout": {
+    "fields": [
+      {
+        "key": "profile_id",
+        "offset": "0x20",
+        "verification": "native menu analysis"
+      },
+      {
+        "key": "adventure_level",
+        "offset": "0x4c",
+        "verification": "416d3d reads and 416d40 copies to Board+5568 for mode0"
+      },
+      {
+        "key": "money_units",
+        "offset": "0x50",
+        "verification": "mechanics-code/0x43c070.c updates and clamps to 99999; units depend on native coin value"
+      },
+      {
+        "key": "adventure_completion_count",
+        "offset": "0x54",
+        "verification": "native menu analysis; existing 4205d0 uses <1 as first-play tutorial condition"
+      },
+      {
+        "key": "mode_completion_record",
+        "offset_formula": "0x54 + 4 * mode_id",
+        "mode_id_range": [
+          1,
+          72
+        ],
+        "verification": "461510 reads this DWORD. Modes1..5 require>=5, modes6..10 require>=10, endless11..15/60/70 returnfalse, other IDs require>0. This is completion, not unlock status."
+      },
+      {
+        "key": "challenge_lock_override_flag",
+        "offset": "0x340",
+        "type": "byte",
+        "verification": "439c8f tests this byte; nonzero causes439c20 to return0 regardless of its earlier calculated lock amount. Read-only metadata; not a suggested profile modification."
+      }
+    ],
+    "unlocks_note": "Completion count and campaign progress can inform eligibility but are not a complete native unlock predicate. Per-mode availability remains unknown until native profile/menu checks are queried. Do not rewrite profile fields to implement a temporary level selection."
+  },
+  "native_predicates": {
+    "challenge_lock_amount": {
+      "va": "0x439c20",
+      "calling_convention": "EDI=ChallengeScreen, EAX=native table index (mode_id-1); return EAX",
+      "semantics": "0 means no challenge lock deficit; positive values are lock/progression deficits. Requires a valid ChallengeScreen and profile; not invoked or validated by the static catalog.",
+      "evidence": [
+        "mode-eligibility.json",
+        "mode-eligibility-core.json",
+        "mode-eligibility-ui-consumer.json"
+      ]
+    },
+    "mode_completed": {
+      "va": "0x461510",
+      "calling_convention": "ECX=App, EAX=mode_id; return AL boolean",
+      "semantics": "Uses profile completion records and mode-specific thresholds; endless modes11..15/60/70 always returnfalse.",
+      "evidence": "mode-profile-completed.json"
+    }
+  },
+  "scenes": [
+    {
+      "id": 0,
+      "key": "loading_or_title",
+      "name": "加载或标题",
+      "verification": "native initial scene and TitleScreen lifecycle; does not alone distinguish loading from clickable title"
+    },
+    {
+      "id": 1,
+      "key": "main_menu",
+      "name": "主菜单",
+      "verification": "45c4ee writes1 during45c4a0 GameSelector creation"
+    },
+    {
+      "id": 2,
+      "key": "level_preparation",
+      "name": "关卡准备",
+      "verification": "416aef and45c477 write2 before play; may include seed selection or intro"
+    },
+    {
+      "id": 3,
+      "key": "playing",
+      "name": "游戏中",
+      "verification": "45c292 and497dfb write3; entity updates check scene3"
+    },
+    {
+      "id": 4,
+      "key": "zombies_won",
+      "name": "失败结算",
+      "verification": "41f82c writes4;41f87b creates447ff0 controller whose448040 update names ZombiesWon"
+    },
+    {
+      "id": 5,
+      "key": "award",
+      "name": "奖励",
+      "verification": "45c5ed writes5 in award screen creation45c5d0"
+    },
+    {
+      "id": 6,
+      "key": "credits",
+      "name": "制作名单",
+      "verification": "45c75b writes6 and creates43f0f0 at App+87c. Constructor43f0f0 references DelayLoad_Credits at7089dc, [CREDITS_MAIN_MENU_BUTTON] at70caec and [CREDITS_REPLAY_BUTTON] at70cb24; see mode-scene6-constructor.json"
+    },
+    {
+      "id": 7,
+      "key": "challenge_selection",
+      "name": "挑战选择",
+      "verification": "45c85b writes7 and438ee0 widget is stored atApp+880 by45c840"
+    }
+  ],
+  "modes": [
+    {
+      "id": 0,
+      "key": "ADVENTURE",
+      "name": "冒险模式",
+      "name_source": "editorial Chinese label; native mode 0 verified by Board initialization",
+      "category": "adventure",
+      "level_range": {
+        "min": 1,
+        "max": 50,
+        "unit": "campaign_level",
+        "validation": "native campaign completion boundary at 45f74f/45f76a; current level copied from profile+4c to Board+5568 at 416d3d/416d40"
+      },
+      "availability": null,
+      "availability_reason": "Current profile and native eligibility have not been queried by this static catalog.",
+      "start_validated": false,
+      "native_record": null
+    },
+    {
+      "id": 1,
+      "key": "SURVIVAL_DAY_NORMAL",
+      "name": "生存模式：白天",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e490",
+        "file_offset": 3461264,
+        "title_va": "0x70c114",
+        "dwords": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          7389460
+        ],
+        "page_raw": 0,
+        "row_raw": 0,
+        "col_raw": 0,
+        "icon_index_raw": 0
+      }
+    },
+    {
+      "id": 2,
+      "key": "SURVIVAL_NIGHT_NORMAL",
+      "name": "生存模式：黑夜",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e4a8",
+        "file_offset": 3461288,
+        "title_va": "0x70c0fc",
+        "dwords": [
+          2,
+          1,
+          0,
+          0,
+          1,
+          7389436
+        ],
+        "page_raw": 0,
+        "row_raw": 0,
+        "col_raw": 1,
+        "icon_index_raw": 1
+      }
+    },
+    {
+      "id": 3,
+      "key": "SURVIVAL_POOL_NORMAL",
+      "name": "生存模式：泳池",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e4c0",
+        "file_offset": 3461312,
+        "title_va": "0x70c0e4",
+        "dwords": [
+          3,
+          2,
+          0,
+          0,
+          2,
+          7389412
+        ],
+        "page_raw": 0,
+        "row_raw": 0,
+        "col_raw": 2,
+        "icon_index_raw": 2
+      }
+    },
+    {
+      "id": 4,
+      "key": "SURVIVAL_FOG_NORMAL",
+      "name": "生存模式：浓雾",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e4d8",
+        "file_offset": 3461336,
+        "title_va": "0x70c0cc",
+        "dwords": [
+          4,
+          3,
+          0,
+          0,
+          3,
+          7389388
+        ],
+        "page_raw": 0,
+        "row_raw": 0,
+        "col_raw": 3,
+        "icon_index_raw": 3
+      }
+    },
+    {
+      "id": 5,
+      "key": "SURVIVAL_ROOF_NORMAL",
+      "name": "生存模式：屋顶",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e4f0",
+        "file_offset": 3461360,
+        "title_va": "0x70c0b4",
+        "dwords": [
+          5,
+          4,
+          0,
+          0,
+          4,
+          7389364
+        ],
+        "page_raw": 0,
+        "row_raw": 0,
+        "col_raw": 4,
+        "icon_index_raw": 4
+      }
+    },
+    {
+      "id": 6,
+      "key": "SURVIVAL_DAY_HARD",
+      "name": "生存模式：白天  (困难)",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e508",
+        "file_offset": 3461384,
+        "title_va": "0x70c0a0",
+        "dwords": [
+          6,
+          5,
+          0,
+          1,
+          0,
+          7389344
+        ],
+        "page_raw": 0,
+        "row_raw": 1,
+        "col_raw": 0,
+        "icon_index_raw": 5
+      }
+    },
+    {
+      "id": 7,
+      "key": "SURVIVAL_NIGHT_HARD",
+      "name": "生存模式：黑夜  (困难)",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e520",
+        "file_offset": 3461408,
+        "title_va": "0x70c088",
+        "dwords": [
+          7,
+          6,
+          0,
+          1,
+          1,
+          7389320
+        ],
+        "page_raw": 0,
+        "row_raw": 1,
+        "col_raw": 1,
+        "icon_index_raw": 6
+      }
+    },
+    {
+      "id": 8,
+      "key": "SURVIVAL_POOL_HARD",
+      "name": "生存模式：泳池  (困难)",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e538",
+        "file_offset": 3461432,
+        "title_va": "0x70c070",
+        "dwords": [
+          8,
+          7,
+          0,
+          1,
+          2,
+          7389296
+        ],
+        "page_raw": 0,
+        "row_raw": 1,
+        "col_raw": 2,
+        "icon_index_raw": 7
+      }
+    },
+    {
+      "id": 9,
+      "key": "SURVIVAL_FOG_HARD",
+      "name": "生存模式：浓雾  (困难)",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e550",
+        "file_offset": 3461456,
+        "title_va": "0x70c05c",
+        "dwords": [
+          9,
+          8,
+          0,
+          1,
+          3,
+          7389276
+        ],
+        "page_raw": 0,
+        "row_raw": 1,
+        "col_raw": 3,
+        "icon_index_raw": 8
+      }
+    },
+    {
+      "id": 10,
+      "key": "SURVIVAL_ROOF_HARD",
+      "name": "生存模式：屋顶  (困难)",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e568",
+        "file_offset": 3461480,
+        "title_va": "0x70c044",
+        "dwords": [
+          10,
+          9,
+          0,
+          1,
+          4,
+          7389252
+        ],
+        "page_raw": 0,
+        "row_raw": 1,
+        "col_raw": 4,
+        "icon_index_raw": 9
+      }
+    },
+    {
+      "id": 11,
+      "key": "SURVIVAL_DAY_ENDLESS",
+      "name": "生存模式：白天  (无限)",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": true,
+      "native_record": {
+        "va": "0x74e580",
+        "file_offset": 3461504,
+        "title_va": "0x70c02c",
+        "dwords": [
+          11,
+          11,
+          0,
+          2,
+          0,
+          7389228
+        ],
+        "page_raw": 0,
+        "row_raw": 2,
+        "col_raw": 0,
+        "icon_index_raw": 11
+      }
+    },
+    {
+      "id": 12,
+      "key": "SURVIVAL_NIGHT_ENDLESS",
+      "name": "生存模式：黑夜  (无限)",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": true,
+      "native_record": {
+        "va": "0x74e598",
+        "file_offset": 3461528,
+        "title_va": "0x70c010",
+        "dwords": [
+          12,
+          12,
+          0,
+          2,
+          1,
+          7389200
+        ],
+        "page_raw": 0,
+        "row_raw": 2,
+        "col_raw": 1,
+        "icon_index_raw": 12
+      }
+    },
+    {
+      "id": 13,
+      "key": "SURVIVAL_POOL_ENDLESS",
+      "name": "生存模式：泳池  (无限)",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": true,
+      "native_record": {
+        "va": "0x74e5b0",
+        "file_offset": 3461552,
+        "title_va": "0x70bff8",
+        "dwords": [
+          13,
+          10,
+          0,
+          2,
+          2,
+          7389176
+        ],
+        "page_raw": 0,
+        "row_raw": 2,
+        "col_raw": 2,
+        "icon_index_raw": 10
+      }
+    },
+    {
+      "id": 14,
+      "key": "SURVIVAL_FOG_ENDLESS",
+      "name": "生存模式：浓雾  (无限)",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": true,
+      "native_record": {
+        "va": "0x74e5c8",
+        "file_offset": 3461576,
+        "title_va": "0x70bfe0",
+        "dwords": [
+          14,
+          13,
+          0,
+          2,
+          3,
+          7389152
+        ],
+        "page_raw": 0,
+        "row_raw": 2,
+        "col_raw": 3,
+        "icon_index_raw": 13
+      }
+    },
+    {
+      "id": 15,
+      "key": "SURVIVAL_ROOF_ENDLESS",
+      "name": "生存模式：屋顶  (无限)",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "survival",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": true,
+      "native_record": {
+        "va": "0x74e5e0",
+        "file_offset": 3461600,
+        "title_va": "0x70bfc8",
+        "dwords": [
+          15,
+          14,
+          0,
+          2,
+          4,
+          7389128
+        ],
+        "page_raw": 0,
+        "row_raw": 2,
+        "col_raw": 4,
+        "icon_index_raw": 14
+      }
+    },
+    {
+      "id": 16,
+      "key": "WAR_AND_PEAS",
+      "name": "植物僵尸",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e5f8",
+        "file_offset": 3461624,
+        "title_va": "0x70bfb8",
+        "dwords": [
+          16,
+          0,
+          1,
+          0,
+          0,
+          7389112
+        ],
+        "page_raw": 1,
+        "row_raw": 0,
+        "col_raw": 0,
+        "icon_index_raw": 0
+      }
+    },
+    {
+      "id": 17,
+      "key": "WALL_NUT_BOWLING",
+      "name": "坚果保龄球",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e610",
+        "file_offset": 3461648,
+        "title_va": "0x70bfa4",
+        "dwords": [
+          17,
+          6,
+          1,
+          0,
+          1,
+          7389092
+        ],
+        "page_raw": 1,
+        "row_raw": 0,
+        "col_raw": 1,
+        "icon_index_raw": 6
+      }
+    },
+    {
+      "id": 18,
+      "key": "SLOT_MACHINE",
+      "name": "拉霸",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e628",
+        "file_offset": 3461672,
+        "title_va": "0x70bf94",
+        "dwords": [
+          18,
+          2,
+          1,
+          0,
+          2,
+          7389076
+        ],
+        "page_raw": 1,
+        "row_raw": 0,
+        "col_raw": 2,
+        "icon_index_raw": 2
+      }
+    },
+    {
+      "id": 19,
+      "key": "ITS_RAINING_SEEDS",
+      "name": "种子雨",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e640",
+        "file_offset": 3461696,
+        "title_va": "0x70bf80",
+        "dwords": [
+          19,
+          3,
+          1,
+          0,
+          3,
+          7389056
+        ],
+        "page_raw": 1,
+        "row_raw": 0,
+        "col_raw": 3,
+        "icon_index_raw": 3
+      }
+    },
+    {
+      "id": 20,
+      "key": "BEGHOULED",
+      "name": "僵尸迷阵",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e658",
+        "file_offset": 3461720,
+        "title_va": "0x70bf74",
+        "dwords": [
+          20,
+          1,
+          1,
+          0,
+          4,
+          7389044
+        ],
+        "page_raw": 1,
+        "row_raw": 0,
+        "col_raw": 4,
+        "icon_index_raw": 1
+      }
+    },
+    {
+      "id": 21,
+      "key": "INVISIGHOUL",
+      "name": "隐形战争",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e670",
+        "file_offset": 3461744,
+        "title_va": "0x70bf64",
+        "dwords": [
+          21,
+          8,
+          1,
+          1,
+          0,
+          7389028
+        ],
+        "page_raw": 1,
+        "row_raw": 1,
+        "col_raw": 0,
+        "icon_index_raw": 8
+      }
+    },
+    {
+      "id": 22,
+      "key": "SEEING_STARS",
+      "name": "观星",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e688",
+        "file_offset": 3461768,
+        "title_va": "0x70bf54",
+        "dwords": [
+          22,
+          5,
+          1,
+          1,
+          1,
+          7389012
+        ],
+        "page_raw": 1,
+        "row_raw": 1,
+        "col_raw": 1,
+        "icon_index_raw": 5
+      }
+    },
+    {
+      "id": 23,
+      "key": "ZOMBIQUARIUM",
+      "name": "僵尸水族馆",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e6a0",
+        "file_offset": 3461792,
+        "title_va": "0x70bf44",
+        "dwords": [
+          23,
+          7,
+          1,
+          1,
+          2,
+          7388996
+        ],
+        "page_raw": 1,
+        "row_raw": 1,
+        "col_raw": 2,
+        "icon_index_raw": 7
+      }
+    },
+    {
+      "id": 24,
+      "key": "BEGHOULED_TWIST",
+      "name": "僵尸迷阵 旋风",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e6b8",
+        "file_offset": 3461816,
+        "title_va": "0x70bf30",
+        "dwords": [
+          24,
+          20,
+          1,
+          1,
+          3,
+          7388976
+        ],
+        "page_raw": 1,
+        "row_raw": 1,
+        "col_raw": 3,
+        "icon_index_raw": 20
+      }
+    },
+    {
+      "id": 25,
+      "key": "LITTLE_TROUBLE",
+      "name": "小小大僵尸",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e6d0",
+        "file_offset": 3461840,
+        "title_va": "0x70bf1c",
+        "dwords": [
+          25,
+          12,
+          1,
+          1,
+          4,
+          7388956
+        ],
+        "page_raw": 1,
+        "row_raw": 1,
+        "col_raw": 4,
+        "icon_index_raw": 12
+      }
+    },
+    {
+      "id": 26,
+      "key": "PORTAL_COMBAT",
+      "name": "斗转星移",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e6e8",
+        "file_offset": 3461864,
+        "title_va": "0x70bf0c",
+        "dwords": [
+          26,
+          15,
+          1,
+          2,
+          0,
+          7388940
+        ],
+        "page_raw": 1,
+        "row_raw": 2,
+        "col_raw": 0,
+        "icon_index_raw": 15
+      }
+    },
+    {
+      "id": 27,
+      "key": "COLUMN_AS_YOU_SEE_EM",
+      "name": "排山倒海",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e700",
+        "file_offset": 3461888,
+        "title_va": "0x70bef4",
+        "dwords": [
+          27,
+          4,
+          1,
+          2,
+          1,
+          7388916
+        ],
+        "page_raw": 1,
+        "row_raw": 2,
+        "col_raw": 1,
+        "icon_index_raw": 4
+      }
+    },
+    {
+      "id": 28,
+      "key": "BOBSLED_BONANZA",
+      "name": "全面冻结",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e718",
+        "file_offset": 3461912,
+        "title_va": "0x70bee0",
+        "dwords": [
+          28,
+          17,
+          1,
+          2,
+          2,
+          7388896
+        ],
+        "page_raw": 1,
+        "row_raw": 2,
+        "col_raw": 2,
+        "icon_index_raw": 17
+      }
+    },
+    {
+      "id": 29,
+      "key": "ZOMBIES_ON_SPEED",
+      "name": "僵尸快跑",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e730",
+        "file_offset": 3461936,
+        "title_va": "0x70becc",
+        "dwords": [
+          29,
+          18,
+          1,
+          2,
+          3,
+          7388876
+        ],
+        "page_raw": 1,
+        "row_raw": 2,
+        "col_raw": 3,
+        "icon_index_raw": 18
+      }
+    },
+    {
+      "id": 30,
+      "key": "WHACK_A_ZOMBIE",
+      "name": "打僵尸",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e748",
+        "file_offset": 3461960,
+        "title_va": "0x70beb8",
+        "dwords": [
+          30,
+          16,
+          1,
+          2,
+          4,
+          7388856
+        ],
+        "page_raw": 1,
+        "row_raw": 2,
+        "col_raw": 4,
+        "icon_index_raw": 16
+      }
+    },
+    {
+      "id": 31,
+      "key": "LAST_STAND",
+      "name": "坚不可摧",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e760",
+        "file_offset": 3461984,
+        "title_va": "0x70bea8",
+        "dwords": [
+          31,
+          21,
+          1,
+          3,
+          0,
+          7388840
+        ],
+        "page_raw": 1,
+        "row_raw": 3,
+        "col_raw": 0,
+        "icon_index_raw": 21
+      }
+    },
+    {
+      "id": 32,
+      "key": "WAR_AND_PEAS_2",
+      "name": "植物僵尸2",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e778",
+        "file_offset": 3462008,
+        "title_va": "0x70be94",
+        "dwords": [
+          32,
+          0,
+          1,
+          3,
+          1,
+          7388820
+        ],
+        "page_raw": 1,
+        "row_raw": 3,
+        "col_raw": 1,
+        "icon_index_raw": 0
+      }
+    },
+    {
+      "id": 33,
+      "key": "WALL_NUT_BOWLING_EXTREME",
+      "name": "坚果保龄球2",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e790",
+        "file_offset": 3462032,
+        "title_va": "0x70be78",
+        "dwords": [
+          33,
+          6,
+          1,
+          3,
+          2,
+          7388792
+        ],
+        "page_raw": 1,
+        "row_raw": 3,
+        "col_raw": 2,
+        "icon_index_raw": 6
+      }
+    },
+    {
+      "id": 34,
+      "key": "POGO_PARTY",
+      "name": "蹦蹦舞会",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e7a8",
+        "file_offset": 3462056,
+        "title_va": "0x70be68",
+        "dwords": [
+          34,
+          14,
+          1,
+          3,
+          3,
+          7388776
+        ],
+        "page_raw": 1,
+        "row_raw": 3,
+        "col_raw": 3,
+        "icon_index_raw": 14
+      }
+    },
+    {
+      "id": 35,
+      "key": "FINAL_BOSS",
+      "name": "僵尸博士的复仇",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "minigame",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e7c0",
+        "file_offset": 3462080,
+        "title_va": "0x70be58",
+        "dwords": [
+          35,
+          19,
+          1,
+          3,
+          4,
+          7388760
+        ],
+        "page_raw": 1,
+        "row_raw": 3,
+        "col_raw": 4,
+        "icon_index_raw": 19
+      }
+    },
+    {
+      "id": 36,
+      "key": "ART_CHALLENGE_WALL_NUT",
+      "name": "当艺术遇上坚果",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e7d8",
+        "file_offset": 3462104,
+        "title_va": "0x70be3c",
+        "dwords": [
+          36,
+          0,
+          2,
+          0,
+          0,
+          7388732
+        ],
+        "page_raw": 2,
+        "row_raw": 0,
+        "col_raw": 0,
+        "icon_index_raw": 0
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 37,
+      "key": "SUNNY_DAY",
+      "name": "晴天",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e7f0",
+        "file_offset": 3462128,
+        "title_va": "0x70be30",
+        "dwords": [
+          37,
+          1,
+          2,
+          0,
+          1,
+          7388720
+        ],
+        "page_raw": 2,
+        "row_raw": 0,
+        "col_raw": 1,
+        "icon_index_raw": 1
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 38,
+      "key": "UNSODDED",
+      "name": "不毛之地",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e808",
+        "file_offset": 3462152,
+        "title_va": "0x70be24",
+        "dwords": [
+          38,
+          2,
+          2,
+          0,
+          2,
+          7388708
+        ],
+        "page_raw": 2,
+        "row_raw": 0,
+        "col_raw": 2,
+        "icon_index_raw": 2
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 39,
+      "key": "BIG_TIME",
+      "name": "重要时间",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e820",
+        "file_offset": 3462176,
+        "title_va": "0x70be18",
+        "dwords": [
+          39,
+          3,
+          2,
+          0,
+          3,
+          7388696
+        ],
+        "page_raw": 2,
+        "row_raw": 0,
+        "col_raw": 3,
+        "icon_index_raw": 3
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 40,
+      "key": "ART_CHALLENGE_SUNFLOWER",
+      "name": "当艺术遇上向日葵",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e838",
+        "file_offset": 3462200,
+        "title_va": "0x70bdfc",
+        "dwords": [
+          40,
+          4,
+          2,
+          0,
+          4,
+          7388668
+        ],
+        "page_raw": 2,
+        "row_raw": 0,
+        "col_raw": 4,
+        "icon_index_raw": 4
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 41,
+      "key": "AIR_RAID",
+      "name": "空袭",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e850",
+        "file_offset": 3462224,
+        "title_va": "0x70bdf0",
+        "dwords": [
+          41,
+          5,
+          2,
+          1,
+          0,
+          7388656
+        ],
+        "page_raw": 2,
+        "row_raw": 1,
+        "col_raw": 0,
+        "icon_index_raw": 5
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 42,
+      "key": "ICE_LEVEL",
+      "name": "急冻先锋",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e868",
+        "file_offset": 3462248,
+        "title_va": "0x70bde4",
+        "dwords": [
+          42,
+          6,
+          2,
+          1,
+          1,
+          7388644
+        ],
+        "page_raw": 2,
+        "row_raw": 1,
+        "col_raw": 1,
+        "icon_index_raw": 6
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 43,
+      "key": "ZEN_GARDEN",
+      "name": "休闲花园",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "garden",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e880",
+        "file_offset": 3462272,
+        "title_va": "0x70bdd4",
+        "dwords": [
+          43,
+          7,
+          2,
+          1,
+          2,
+          7388628
+        ],
+        "page_raw": 2,
+        "row_raw": 1,
+        "col_raw": 2,
+        "icon_index_raw": 7
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 44,
+      "key": "HIGH_GRAVITY",
+      "name": "牛顿的力量",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e898",
+        "file_offset": 3462296,
+        "title_va": "0x70bdc4",
+        "dwords": [
+          44,
+          8,
+          2,
+          1,
+          3,
+          7388612
+        ],
+        "page_raw": 2,
+        "row_raw": 1,
+        "col_raw": 3,
+        "icon_index_raw": 8
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 45,
+      "key": "GRAVE_DANGER",
+      "name": "坟墓危险",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e8b0",
+        "file_offset": 3462320,
+        "title_va": "0x70bdb4",
+        "dwords": [
+          45,
+          11,
+          2,
+          1,
+          4,
+          7388596
+        ],
+        "page_raw": 2,
+        "row_raw": 1,
+        "col_raw": 4,
+        "icon_index_raw": 11
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 46,
+      "key": "CAN_YOU_DIG_IT",
+      "name": "地道战",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e8c8",
+        "file_offset": 3462344,
+        "title_va": "0x70bda0",
+        "dwords": [
+          46,
+          10,
+          2,
+          2,
+          0,
+          7388576
+        ],
+        "page_raw": 2,
+        "row_raw": 2,
+        "col_raw": 0,
+        "icon_index_raw": 10
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 47,
+      "key": "DARK_STORMY_NIGHT",
+      "name": "暴风雨之夜",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e8e0",
+        "file_offset": 3462368,
+        "title_va": "0x70bd8c",
+        "dwords": [
+          47,
+          13,
+          2,
+          2,
+          1,
+          7388556
+        ],
+        "page_raw": 2,
+        "row_raw": 2,
+        "col_raw": 1,
+        "icon_index_raw": 13
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 48,
+      "key": "BUNGEE_BLITZ",
+      "name": "飞贼闪击战",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e8f8",
+        "file_offset": 3462392,
+        "title_va": "0x70bd7c",
+        "dwords": [
+          48,
+          9,
+          2,
+          2,
+          2,
+          7388540
+        ],
+        "page_raw": 2,
+        "row_raw": 2,
+        "col_raw": 2,
+        "icon_index_raw": 9
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 49,
+      "key": "SQUIRREL",
+      "name": "松鼠",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "hidden_challenge",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e910",
+        "file_offset": 3462416,
+        "title_va": "0x70bd70",
+        "dwords": [
+          49,
+          10,
+          2,
+          2,
+          3,
+          7388528
+        ],
+        "page_raw": 2,
+        "row_raw": 2,
+        "col_raw": 3,
+        "icon_index_raw": 10
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 50,
+      "key": "TREE_OF_WISDOM",
+      "name": "智慧树",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "tree_of_wisdom",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e928",
+        "file_offset": 3462440,
+        "title_va": "0x70bd5c",
+        "dwords": [
+          50,
+          10,
+          2,
+          2,
+          4,
+          7388508
+        ],
+        "page_raw": 2,
+        "row_raw": 2,
+        "col_raw": 4,
+        "icon_index_raw": 10
+      },
+      "selection_note": "Listed on the native hidden/internal challenge page; existence does not establish ordinary menu availability."
+    },
+    {
+      "id": 51,
+      "key": "SCARY_POTTER_1",
+      "name": "花瓶终结者",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "vasebreaker",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e940",
+        "file_offset": 3462464,
+        "title_va": "0x70bd48",
+        "dwords": [
+          51,
+          10,
+          3,
+          0,
+          0,
+          7388488
+        ],
+        "page_raw": 3,
+        "row_raw": 0,
+        "col_raw": 0,
+        "icon_index_raw": 10
+      },
+      "series_level": 1,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 52,
+      "key": "SCARY_POTTER_2",
+      "name": "一路向左",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "vasebreaker",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e958",
+        "file_offset": 3462488,
+        "title_va": "0x70bd34",
+        "dwords": [
+          52,
+          10,
+          3,
+          0,
+          1,
+          7388468
+        ],
+        "page_raw": 3,
+        "row_raw": 0,
+        "col_raw": 1,
+        "icon_index_raw": 10
+      },
+      "series_level": 2,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 53,
+      "key": "SCARY_POTTER_3",
+      "name": "第3个花瓶",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "vasebreaker",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e970",
+        "file_offset": 3462512,
+        "title_va": "0x70bd20",
+        "dwords": [
+          53,
+          10,
+          3,
+          0,
+          2,
+          7388448
+        ],
+        "page_raw": 3,
+        "row_raw": 0,
+        "col_raw": 2,
+        "icon_index_raw": 10
+      },
+      "series_level": 3,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 54,
+      "key": "SCARY_POTTER_4",
+      "name": "连锁反应",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "vasebreaker",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e988",
+        "file_offset": 3462536,
+        "title_va": "0x70bd0c",
+        "dwords": [
+          54,
+          10,
+          3,
+          0,
+          3,
+          7388428
+        ],
+        "page_raw": 3,
+        "row_raw": 0,
+        "col_raw": 3,
+        "icon_index_raw": 10
+      },
+      "series_level": 4,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 55,
+      "key": "SCARY_POTTER_5",
+      "name": "金属狂潮",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "vasebreaker",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e9a0",
+        "file_offset": 3462560,
+        "title_va": "0x70bcf8",
+        "dwords": [
+          55,
+          10,
+          3,
+          0,
+          4,
+          7388408
+        ],
+        "page_raw": 3,
+        "row_raw": 0,
+        "col_raw": 4,
+        "icon_index_raw": 10
+      },
+      "series_level": 5,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 56,
+      "key": "SCARY_POTTER_6",
+      "name": "胆怯的制陶工",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "vasebreaker",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e9b8",
+        "file_offset": 3462584,
+        "title_va": "0x70bce4",
+        "dwords": [
+          56,
+          10,
+          3,
+          1,
+          0,
+          7388388
+        ],
+        "page_raw": 3,
+        "row_raw": 1,
+        "col_raw": 0,
+        "icon_index_raw": 10
+      },
+      "series_level": 6,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 57,
+      "key": "SCARY_POTTER_7",
+      "name": "戏法时刻",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "vasebreaker",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e9d0",
+        "file_offset": 3462608,
+        "title_va": "0x70bcd0",
+        "dwords": [
+          57,
+          10,
+          3,
+          1,
+          1,
+          7388368
+        ],
+        "page_raw": 3,
+        "row_raw": 1,
+        "col_raw": 1,
+        "icon_index_raw": 10
+      },
+      "series_level": 7,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 58,
+      "key": "SCARY_POTTER_8",
+      "name": "连锁反应之二",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "vasebreaker",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74e9e8",
+        "file_offset": 3462632,
+        "title_va": "0x70bcbc",
+        "dwords": [
+          58,
+          10,
+          3,
+          1,
+          2,
+          7388348
+        ],
+        "page_raw": 3,
+        "row_raw": 1,
+        "col_raw": 2,
+        "icon_index_raw": 10
+      },
+      "series_level": 8,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 59,
+      "key": "SCARY_POTTER_9",
+      "name": "破坏之王",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "vasebreaker",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74ea00",
+        "file_offset": 3462656,
+        "title_va": "0x70bca8",
+        "dwords": [
+          59,
+          10,
+          3,
+          1,
+          3,
+          7388328
+        ],
+        "page_raw": 3,
+        "row_raw": 1,
+        "col_raw": 3,
+        "icon_index_raw": 10
+      },
+      "series_level": 9,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 60,
+      "key": "SCARY_POTTER_ENDLESS",
+      "name": "花瓶终结者    （无限）",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "vasebreaker",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": true,
+      "native_record": {
+        "va": "0x74ea18",
+        "file_offset": 3462680,
+        "title_va": "0x70bc90",
+        "dwords": [
+          60,
+          10,
+          3,
+          1,
+          4,
+          7388304
+        ],
+        "page_raw": 3,
+        "row_raw": 1,
+        "col_raw": 4,
+        "icon_index_raw": 10
+      },
+      "series_level": null,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 61,
+      "key": "I_ZOMBIE_1",
+      "name": "僵尸公敌",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "i_zombie",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74ea30",
+        "file_offset": 3462704,
+        "title_va": "0x70bc80",
+        "dwords": [
+          61,
+          11,
+          3,
+          2,
+          0,
+          7388288
+        ],
+        "page_raw": 3,
+        "row_raw": 2,
+        "col_raw": 0,
+        "icon_index_raw": 11
+      },
+      "series_level": 1,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 62,
+      "key": "I_ZOMBIE_2",
+      "name": "僵尸公敌2",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "i_zombie",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74ea48",
+        "file_offset": 3462728,
+        "title_va": "0x70bc70",
+        "dwords": [
+          62,
+          11,
+          3,
+          2,
+          1,
+          7388272
+        ],
+        "page_raw": 3,
+        "row_raw": 2,
+        "col_raw": 1,
+        "icon_index_raw": 11
+      },
+      "series_level": 2,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 63,
+      "key": "I_ZOMBIE_3",
+      "name": "地道战",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "i_zombie",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74ea60",
+        "file_offset": 3462752,
+        "title_va": "0x70bc60",
+        "dwords": [
+          63,
+          11,
+          3,
+          2,
+          2,
+          7388256
+        ],
+        "page_raw": 3,
+        "row_raw": 2,
+        "col_raw": 2,
+        "icon_index_raw": 11
+      },
+      "series_level": 3,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 64,
+      "key": "I_ZOMBIE_4",
+      "name": "完全防御",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "i_zombie",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74ea78",
+        "file_offset": 3462776,
+        "title_va": "0x70bc50",
+        "dwords": [
+          64,
+          11,
+          3,
+          2,
+          3,
+          7388240
+        ],
+        "page_raw": 3,
+        "row_raw": 2,
+        "col_raw": 3,
+        "icon_index_raw": 11
+      },
+      "series_level": 4,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 65,
+      "key": "I_ZOMBIE_5",
+      "name": "死亡气球",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "i_zombie",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74ea90",
+        "file_offset": 3462800,
+        "title_va": "0x70bc40",
+        "dwords": [
+          65,
+          11,
+          3,
+          2,
+          4,
+          7388224
+        ],
+        "page_raw": 3,
+        "row_raw": 2,
+        "col_raw": 4,
+        "icon_index_raw": 11
+      },
+      "series_level": 5,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 66,
+      "key": "I_ZOMBIE_6",
+      "name": "力拔山河",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "i_zombie",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74eaa8",
+        "file_offset": 3462824,
+        "title_va": "0x70bc30",
+        "dwords": [
+          66,
+          11,
+          3,
+          3,
+          0,
+          7388208
+        ],
+        "page_raw": 3,
+        "row_raw": 3,
+        "col_raw": 0,
+        "icon_index_raw": 11
+      },
+      "series_level": 6,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 67,
+      "key": "I_ZOMBIE_7",
+      "name": "太空舞步",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "i_zombie",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74eac0",
+        "file_offset": 3462848,
+        "title_va": "0x70bc20",
+        "dwords": [
+          67,
+          11,
+          3,
+          3,
+          1,
+          7388192
+        ],
+        "page_raw": 3,
+        "row_raw": 3,
+        "col_raw": 1,
+        "icon_index_raw": 11
+      },
+      "series_level": 7,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 68,
+      "key": "I_ZOMBIE_8",
+      "name": "飞檐走壁",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "i_zombie",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74ead8",
+        "file_offset": 3462872,
+        "title_va": "0x70bc10",
+        "dwords": [
+          68,
+          11,
+          3,
+          3,
+          2,
+          7388176
+        ],
+        "page_raw": 3,
+        "row_raw": 3,
+        "col_raw": 2,
+        "icon_index_raw": 11
+      },
+      "series_level": 8,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 69,
+      "key": "I_ZOMBIE_9",
+      "name": "大混战",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "i_zombie",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74eaf0",
+        "file_offset": 3462896,
+        "title_va": "0x70bc00",
+        "dwords": [
+          69,
+          11,
+          3,
+          3,
+          3,
+          7388160
+        ],
+        "page_raw": 3,
+        "row_raw": 3,
+        "col_raw": 3,
+        "icon_index_raw": 11
+      },
+      "series_level": 9,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 70,
+      "key": "I_ZOMBIE_ENDLESS",
+      "name": "僵尸公敌     （无限）",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "i_zombie",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": true,
+      "native_record": {
+        "va": "0x74eb08",
+        "file_offset": 3462920,
+        "title_va": "0x70bbec",
+        "dwords": [
+          70,
+          11,
+          3,
+          3,
+          4,
+          7388140
+        ],
+        "page_raw": 3,
+        "row_raw": 3,
+        "col_raw": 4,
+        "icon_index_raw": 11
+      },
+      "series_level": null,
+      "selection_note": "Puzzle stages have separate mode IDs; do not assume the adventure level parameter selects this stage."
+    },
+    {
+      "id": 71,
+      "key": "UPSELL",
+      "name": "追加销售",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "internal",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74eb20",
+        "file_offset": 3462944,
+        "title_va": "0x70bbe0",
+        "dwords": [
+          71,
+          10,
+          2,
+          3,
+          4,
+          7388128
+        ],
+        "page_raw": 2,
+        "row_raw": 3,
+        "col_raw": 4,
+        "icon_index_raw": 10
+      },
+      "selection_note": "Internal promotional/intro mode; cataloged for completeness, not validated as a playable level."
+    },
+    {
+      "id": 72,
+      "key": "INTRO",
+      "name": "介绍",
+      "name_source": "main.pak LawnStrings Chinese localization",
+      "category": "internal",
+      "level_range": null,
+      "availability": null,
+      "availability_reason": "A native catalog entry does not prove visibility, profile unlock status, or safe direct start.",
+      "start_validated": false,
+      "endless": false,
+      "native_record": {
+        "va": "0x74eb38",
+        "file_offset": 3462968,
+        "title_va": "0x70bbd8",
+        "dwords": [
+          72,
+          10,
+          2,
+          2,
+          3,
+          7388120
+        ],
+        "page_raw": 2,
+        "row_raw": 2,
+        "col_raw": 3,
+        "icon_index_raw": 10
+      },
+      "selection_note": "Internal promotional/intro mode; cataloged for completeness, not validated as a playable level."
+    }
+  ]
+}
