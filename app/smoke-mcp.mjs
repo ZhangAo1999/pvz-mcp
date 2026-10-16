@@ -22,7 +22,7 @@ try {
   report.checks.push('initialize/connect');
   const catalog = await client.listTools();
   const names = catalog.tools.map(tool => tool.name).sort();
-  assert.deepEqual(names, ['pvz_launch_game', 'pvz_list_modes', 'pvz_start_game', 'pvz_return_to_menu', 'pvz_status', 'pvz_get_state', 'pvz_pause', 'pvz_advance', 'pvz_resume', 'pvz_select_seeds', 'pvz_can_place', 'pvz_place_plant', 'pvz_collect', 'pvz_set_presentation', 'pvz_admin_set_sun', 'pvz_admin_set_progress', 'pvz_set_commentary', 'pvz_get_save_info'].sort());
+  assert.deepEqual(names, ['pvz_launch_game', 'pvz_list_modes', 'pvz_start_game', 'pvz_return_to_menu', 'pvz_status', 'pvz_get_state', 'pvz_pause', 'pvz_advance', 'pvz_resume', 'pvz_select_seeds', 'pvz_can_place', 'pvz_place_plant', 'pvz_collect', 'pvz_set_presentation', 'pvz_admin_set_sun', 'pvz_admin_set_progress', 'pvz_set_commentary', 'pvz_get_save_info', 'pvz_check_update'].sort());
   assert.equal(catalog.tools.find(tool => tool.name === 'pvz_status').annotations.readOnlyHint, true);
   report.tools = names;
   assert.equal(catalog.tools.find(tool => tool.name === 'pvz_list_modes').annotations.readOnlyHint, true);
@@ -39,11 +39,18 @@ try {
   assert.ok(!(catalog.tools.find(tool => tool.name === 'pvz_advance').inputSchema.required || []).includes('ticks'));
   assert.ok(catalog.tools.find(tool => tool.name === 'pvz_admin_set_progress').inputSchema.required.includes('expected_save_sha256'));
   assert.ok(catalog.tools.find(tool => tool.name === 'pvz_admin_set_progress').inputSchema.required.includes('expected_session_id'));
-  report.checks.push('all 18 tools, session guards, async advance and guarded progress edit schemas listed');
+  assert.equal(catalog.tools.find(t => t.name === 'pvz_check_update').annotations.openWorldHint, true);
+  report.checks.push('all 19 tools, update check, session guards, async advance and guarded progress edit schemas listed');
   const response = await client.callTool({ name: 'pvz_status', arguments: {} });
   assert.ok(!response.isError, JSON.stringify(response));
   report.status = response.structuredContent ?? JSON.parse(response.content.find(item => item.type === 'text').text);
   report.checks.push('pvz_status round trip');
+  assert.equal(report.status.update.repository, 'ZhangAo1999/pvz-mcp');
+  const update = await client.callTool({name: 'pvz_check_update', arguments: {force: false}});
+  assert.ok(!update.isError, JSON.stringify(update));
+  report.update = update.structuredContent ?? JSON.parse(update.content.find(item => item.type === 'text').text);
+  assert.equal(report.update.repository, 'ZhangAo1999/pvz-mcp');
+  report.checks.push('update status and manual update tool round trip');
   assert.equal(catalog.tools.find(t=>t.name==='pvz_get_save_info').annotations.readOnlyHint,true);
   if(report.status.running){
     const saveResponse=await client.callTool({name:'pvz_get_save_info',arguments:{expected_session_id:report.status.session_id}});

@@ -10,7 +10,8 @@ runtime/node/LICENSE. Tcl/Tk notices remain under runtime/python/tcl.
 MCP TypeScript SDK 2.3.1: Apache-2.0; Zod 4.4.3: MIT.
 The exact dependency versions and declared licenses are recorded in
 dependency-versions.json. Every bundled module retains its own license files.
-Third-party runtime and library licenses remain applicable separately from MIT.
+Project code: GPL-3.0-only, Copyright (c) 2026 ZhangAo1999; see LICENSE and NOTICE.
+Third-party runtime and library licenses remain applicable separately.
 
 Source archives do not bundle runtimes or node_modules. Set PVZ_PYTHON to an
 installed Windows Python with tkinter, and PVZ_SDK_ROOT to an installed SDK

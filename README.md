@@ -2,7 +2,7 @@
 
 通过 MCP 让 AI 游玩《植物大战僵尸》：读取游戏状态，自主决定种植位置和等待时间，再通过工具执行操作。整个过程可以不看画面、不操作鼠标。
 
-当前版本：`0.3.1-preview.1`，支持 Windows x64 上运行的特定 **1.2.0.1073** 构建。
+当前版本：`0.3.2-preview.1`，支持 Windows x64 上运行的特定 **1.2.0.1073** 构建。
 
 本项目提供工具源码和安装脚本，不包含游戏文件、资源或存档。使用者需要自行准备兼容的游戏，以及支持本地 stdio MCP 的 AI 客户端。
 
@@ -13,6 +13,7 @@
 - **执行操作**：选择模式与关卡、选卡、按正常规则种植、拾取物品。
 - **观战提示**：显示决策计时、推进倒计时，以及 AI 的打算和操作说明。
 - **管理进度**：读取存档信息，在主菜单修改冒险进度并备份原档。
+- **检查更新**：MCP 启动后在后台查询本仓库 Release，默认每 24 小时检查一次，也可手动检查。
 
 默认自动拾取阳光，使用原生声音和收集动画，不增加额外阳光。工具本身不包含自动决策策略，如何游玩由连接它的 AI 决定。
 
@@ -94,11 +95,12 @@ Get-FileHash -LiteralPath 'D:\Games\PvZ\PlantsVsZombies.exe' -Algorithm SHA256
 
 ## MCP 工具列表
 
-当前提供 **18 个工具**。具体操作受当前场景、模式和解锁状态限制。
+当前提供 **19 个工具**。具体操作受当前场景、模式和解锁状态限制。
 
 | 工具 | 用途 |
 | --- | --- |
 | `pvz_status` | 只读查询游戏进程、场景和控制状态 |
+| `pvz_check_update` | 查询本仓库新版本、安装器下载地址与 SHA-256 |
 | `pvz_launch_game` | 启动受支持的游戏并加载桥接，或复用已连接的进程 |
 | `pvz_list_modes` | 查询模式目录和支持信息 |
 | `pvz_start_game` | 开始冒险或指定模式，支持显式选关 |
@@ -131,7 +133,23 @@ Get-FileHash -LiteralPath 'D:\Games\PvZ\PlantsVsZombies.exe' -Algorithm SHA256
 .\Manage.ps1 -Action Rollback
 ```
 
-回退只切换工具版本，不恢复游戏存档。当前不提供在线更新检测或自动下载。
+回退只切换工具版本，不恢复游戏存档。
+
+### 自动检查更新
+
+连接 MCP 后，工具在后台从 [本仓库 Releases](https://github.com/ZhangAo1999/pvz-mcp/releases) 检查新版，默认每 24 小时一次。检查结果会加入 `pvz_status` 的 `update` 字段；发现新版时向客户端输出提示。客户端是否直接显示提示取决于其日志界面，AI 也可读取状态后告知你。
+
+预览版默认同时检查正式版和预览版，正式版默认仅检查正式版。工具按版本号比较，忽略草稿和缺少 EXE 安装器的 Release。网络失败或 GitHub 限流会稍后重试，不阻塞 MCP 连接或游戏操作。
+
+可以让 AI 调用 `pvz_check_update` 立即检查，也可在安装目录运行：
+
+```powershell
+.\Manage.ps1 -Action CheckUpdate
+```
+
+检查更新只获取版本元数据，不会自动下载、安装或重启。升级时下载提示中的 EXE，再选择原安装目录。`0.3.1-preview.1` 及更早版本需要先手动升级一次，才具备此功能。
+
+自动检查开关、更新频道和代理配置见[调用说明](docs/USAGE.md#更新检查)。
 
 ## 开发与贡献
 
@@ -141,6 +159,10 @@ Get-FileHash -LiteralPath 'D:\Games\PvZ\PlantsVsZombies.exe' -Algorithm SHA256
 
 ## 许可
 
-项目工具代码使用 [MIT License](LICENSE)，第三方依赖遵循各自许可证，见[第三方声明](THIRD-PARTY-NOTICES.txt)。
+Copyright (c) 2026 **ZhangAo1999**。原项目：<https://github.com/ZhangAo1999/pvz-mcp>。
+
+从 `0.3.2-preview.1` 起，项目工具代码使用 [GNU GPL v3，仅第 3 版（GPL-3.0-only）](LICENSE)。二次分发时需保留适用的作者版权和许可证声明，标明修改，并按 GPL 要求提供对应源码；私人修改自用无需公开。作者和来源信息见 [NOTICE](NOTICE)。
+
+已发布的 `0.3.1-preview.1` 保留其 MIT 许可。第三方依赖遵循各自许可证，见[第三方声明](THIRD-PARTY-NOTICES.txt)。
 
 本项目与 EA / PopCap 无隶属或授权关系。使用工具仍需遵守适用的游戏许可协议及法律。

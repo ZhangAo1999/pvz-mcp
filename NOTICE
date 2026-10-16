@@ -1,0 +1,12 @@
+PvZ MCP
+Copyright (c) 2026 ZhangAo1999
+Original project: https://github.com/ZhangAo1999/pvz-mcp
+SPDX-License-Identifier: GPL-3.0-only
+
+This project is licensed under GNU GPL version 3 only; see LICENSE.
+Keep the applicable copyright and license notices when redistributing.
+Modified distributions must identify their changes and comply with the GPL's
+corresponding-source requirements. Third-party components retain their own licenses.
+
+Release 0.3.1-preview.1 was distributed under MIT. This license applies to
+0.3.2-preview.1 and subsequent releases unless explicitly stated otherwise.

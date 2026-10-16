@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { UpdateChecker, VERSION } from './updates.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const sdkRoot = process.env.PVZ_SDK_ROOT || path.join(root,'../node_modules');
@@ -141,6 +142,7 @@ class Backend {
 }
 
 const backend = new Backend();
+const updates = new UpdateChecker({notify: result => console.error(`[pvz-mcp] Update available: ${result.latest.version} ${result.latest.release_url}`)});
 const epoch = z.number().int().min(1).max(0xffffffff).describe('board_epoch from the latest pvz_get_state; rejects commands against an old board.');
 const session = z.string().min(1).max(128).describe('Optional session_id from status/state; rejects an action if the game process has restarted.').optional();
 const commandId = z.string().min(1).max(128).describe('Optional unique action ID. Reuse only to retry the exact same action; backend deduplicates it.').optional();
@@ -158,6 +160,7 @@ const selectedSeeds = z.array(z.number().int().min(0).max(47)).min(1).max(10)
   .meta({ uniqueItems: true })
   .describe('Unique plant type IDs from the current available_seeds list, in deck order. Use exactly the deck size required by the game. Imitator (48) is not supported.');
 const specifications = [
+  ['pvz_check_update', 'check_update', 'Check published installer releases from ZhangAo1999/pvz-mcp. Includes preview releases when the configured channel is preview. force defaults to true; false reuses the 24-hour cache. Returns version, release page, EXE download URL and SHA-256 when supplied by GitHub. Inform the user when a newer version is available, outside active recording. Does not download, install, restart or affect the game.', z.strictObject({force: z.boolean().default(true)}), true, true],
   ['pvz_get_save_info', 'get_save_info', 'Read the loaded native profile save identity, next adventure level, SHA-256 and can_edit_progress without pausing or changing the save. Use saved_level, save_sha256 and session_id as guards for pvz_admin_set_progress. Editing requires the main menu, no board/replay, and matching disk/memory progress. Only adventure progress is editable; arbitrary save fields are unsupported.', z.strictObject({ expected_session_id: session }), true, true],
   ['pvz_set_commentary', 'set_commentary', 'Publish a short spectator-facing plan after deciding, and a summary of operations performed (including multiple plants). Outlined transparent captions persist across pauses; commentary_ms limits how quickly changed text replaces the previous explanation. Publish plan and actual action together only for meaningful changes; do not refresh filler every step. Presentation I/O failure returns display_updated=false and does not fail game actions. No extra game state or wait is added. Updates HUD text only; does not pause, advance, spend sun, or change speed. Each caption displays at most two lines. Empty text clears a custom caption.', z.strictObject({ plan:z.string().max(96).optional(), action:z.string().max(160).optional(), ...mutation }).refine(value=>value.plan!==undefined || value.action!==undefined,{message:'Provide plan or action'}), false, true],
   ['pvz_launch_game', 'launch_game', 'Launch the verified local game if needed, then return status. Reuses an existing matching process. Does not require mouse or screen input.', z.strictObject({}), false, true],
@@ -179,14 +182,16 @@ const specifications = [
 ];
 
 function createServer() {
-  const server = new McpServer({ name: 'pvz-local-toolset', version: '0.3.0' }, { capabilities: { tools: {} } });
+  const server = new McpServer({ name: 'pvz-local-toolset', version: VERSION }, { capabilities: { tools: {} } });
   for (const [name, method, description, schema, readOnlyHint, idempotentHint] of specifications) {
     server.registerTool(name, {
       description, inputSchema: schema, outputSchema: z.looseObject({}),
-      annotations: { readOnlyHint, destructiveHint: ['start_game', 'return_to_menu', 'admin_set_progress'].includes(method), idempotentHint, openWorldHint: false },
+      annotations: { readOnlyHint, destructiveHint: ['start_game', 'return_to_menu', 'admin_set_progress'].includes(method), idempotentHint, openWorldHint: method === 'check_update' },
     }, async (params, context) => {
       try {
-        const result = await backend.request(method, params, context.mcpReq.signal);
+        const result = method === 'check_update' ? await updates.check({force: params.force}) :
+          await backend.request(method, params, context.mcpReq.signal);
+        if (method === 'status') result.update = updates.snapshot();
         const output = result !== null && typeof result === 'object' && !Array.isArray(result) ? result : { value: result };
         return { content: [{ type: 'text', text: JSON.stringify(output) }], structuredContent: output };
       } catch (error) {
@@ -199,8 +204,10 @@ function createServer() {
 }
 
 const handle = serveStdio(createServer, { onerror: error => console.error(`[pvz-mcp] ${error.message}`) });
-process.stdin.once('end', () => backend.close());
+updates.start();
+process.stdin.once('end', () => { backend.close(); updates.close(); });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
   backend.close();
+  updates.close();
   void handle.close();
 });

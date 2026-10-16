@@ -67,6 +67,10 @@ if ($GamePath) {
 if (!(Test-Path -LiteralPath (Join-Path $InstallDir 'data\presentation.json'))) {
     '{"speed":1,"show_overlay":true,"advance_ms":2000,"commentary_ms":3000,"decision_hold_ms":0}' | Set-Content -LiteralPath (Join-Path $InstallDir 'data\presentation.json') -Encoding Ascii
 }
+if (!(Test-Path -LiteralPath (Join-Path $InstallDir 'data\update-settings.json'))) {
+    $updateSettings = @{enabled=$true;channel=$package.channel} | ConvertTo-Json
+    [IO.File]::WriteAllText((Join-Path $InstallDir 'data\update-settings.json'),$updateSettings,(New-Object Text.UTF8Encoding($false)))
+}
 # Configurable user state is never copied from a release or overwritten on upgrade.
 $active = Join-Path $InstallDir 'active.json'
 if (Test-Path -LiteralPath $active) {

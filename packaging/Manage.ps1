@@ -1,7 +1,14 @@
-param([ValidateSet('Status','Rollback')][string]$Action='Status')
+param([ValidateSet('Status','Rollback','CheckUpdate')][string]$Action='Status')
 $ErrorActionPreference='Stop'
 $file=Join-Path $PSScriptRoot 'active.json'
 $active=Get-Content -LiteralPath $file -Raw | ConvertFrom-Json
+if ($Action -eq 'CheckUpdate') {
+    if ($active.version -notmatch '^\d+\.\d+\.\d+(-[a-z0-9.]+)?$') { throw 'Invalid active version' }
+    $versionRoot=Join-Path $PSScriptRoot ('versions\'+$active.version)
+    $env:PVZ_DATA_DIR=Join-Path $PSScriptRoot 'data'
+    & (Join-Path $versionRoot 'runtime\node\node.exe') (Join-Path $versionRoot 'app\updates.mjs')
+    exit $LASTEXITCODE
+}
 if($Action -eq 'Rollback') {
     if(!$active.previous -or $active.previous -notmatch '^\d+\.\d+\.\d+(-[a-z0-9.]+)?$') { throw 'No previous installed version' }
     if(!(Test-Path -LiteralPath (Join-Path $PSScriptRoot ('versions\'+$active.previous)))) { throw 'Previous version missing' }

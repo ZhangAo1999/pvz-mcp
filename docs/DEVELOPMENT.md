@@ -19,7 +19,7 @@
 
 ## 从源码运行
 
-已验证的环境为 Windows x64、Node.js 24 和包含 tkinter 的 Python 3.8。Node.js 依赖要求至少 20；其他运行时版本需要自行验证。
+已验证的环境为 Windows x64、Node.js 24 和包含 tkinter 的 Python 3.8。Node.js 至少需要 20.3，更新检查的代理功能需要 24.5 或更新版本；其他运行时版本需要自行验证。
 
 在仓库根目录执行，替换 Python 和游戏路径：
 
@@ -71,6 +71,16 @@ $env:PYTHONPATH = Join-Path $PWD 'app'
 ```
 
 原始 EXE 的静态交叉验证需要设置 `PVZ_TEST_GAME`；可选本地化检查需要 `PVZ_TEST_LOCALIZATION`。缺少输入时对应检查会跳过。测试生成物集中保存在 D 盘临时目录，供手动清理。
+
+## 更新检查的测试与发布
+
+更新模块的离线回归测试：
+
+```powershell
+node --test .\tests\test_updates.mjs
+```
+
+`app/updates.mjs` 直接查询本仓库的公开 Release 列表，不依赖 GitHub 登录。MCP 和 `Manage.ps1 -Action CheckUpdate` 共用该实现。缓存和设置位于数据目录，不属于源码或构建产物；发布预览版时，须勾选 GitHub 的 Pre-release，并上传名称与版本匹配的 EXE。使用新版本号构建与发布，保留旧版本供回退。
 
 ## 添加游戏版本适配
 

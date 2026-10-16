@@ -37,6 +37,9 @@ def build(destination):
     bundle=destination/('PvZ-MCP-'+VERSION+'-windows-x64')
     if bundle.exists():raise ValueError('Build folder exists; use a new output directory or version')
     payload=bundle/'payload';payload.mkdir(parents=True)
+    shutil.copy2(str(SOURCE/'package.json'),str(payload/'package.json'))
+    for name in ['LICENSE','NOTICE','THIRD-PARTY-NOTICES.txt']:
+        shutil.copy2(str(SOURCE/name),str(payload/name))
     shutil.copytree(str(SOURCE/'app'),str(payload/'app'),ignore=ignore)
     py=payload/'runtime'/'python';py.mkdir(parents=True)
     for name in ['python.exe','pythonw.exe','python3.dll','python38.dll','vcruntime140.dll','vcruntime140_1.dll','LICENSE.txt']:
@@ -48,13 +51,13 @@ def build(destination):
     (payload/'dependency-versions.json').write_text(json.dumps(dependencies,indent=2),encoding='utf-8')
     for name in ['Install.cmd','Install.ps1','mcp.mjs','Manage.ps1']:
         shutil.copy2(str(SOURCE/'packaging'/name),str(bundle/name))
-    for name in ['README.md','README.txt','LICENSE','THIRD-PARTY-NOTICES.txt']:
+    for name in ['README.md','README.txt','LICENSE','NOTICE','THIRD-PARTY-NOTICES.txt']:
         shutil.copy2(str(SOURCE/name),str(bundle/name))
     if (SOURCE/'docs').exists():
         shutil.copytree(str(SOURCE/'docs'),str(bundle/'docs'),ignore=ignore)
     hashes={p.relative_to(payload).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
         for p in sorted(payload.rglob('*')) if p.is_file()}
-    release=dict(version=VERSION,channel='preview',platform='windows-x64',adapter='original-1.2.0.1073-runtime-v1',
+    release=dict(version=VERSION,channel='preview' if '-' in VERSION else 'stable',platform='windows-x64',adapter='original-1.2.0.1073-runtime-v1',
         game_included=False,files=hashes)
     (bundle/'release.json').write_text(json.dumps(release,indent=2),encoding='utf-8')
     payload_zip=destination/(bundle.name+'.zip')

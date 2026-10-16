@@ -111,3 +111,23 @@
 修改后再次调用 `pvz_get_save_info` 复核。该接口只修改当前已加载用户的冒险进度，不修改金币、植物解锁或其他任意字段。
 
 如果返回 `SAVE_CHANGED`、`PROGRESS_CHANGED` 或 `STALE_SESSION`，应重新获取状态和校验值；不要使用旧参数强行重试。
+
+## 更新检查
+
+`pvz_check_update` 不需要游戏运行或游戏配置。默认 `force:true` 立即查询；传入 `{"force":false}` 可复用缓存。它只访问 `ZhangAo1999/pvz-mcp` 的公开 Release 元数据，不读取账号凭据，也不下载或执行安装器。
+
+结果包含 `current_version`、`available`、`latest`、`checked_at`、`channel` 和 `status`。`latest` 包含版本、Release 页面、EXE 下载地址、大小以及 GitHub 提供的 SHA-256。网络错误通过 `status:error`、`error` 和 `stale` 表示；上次成功结果可以保留，不把网络失败误报为“已是最新版”。
+
+自动检查在 MCP 启动时和运行期间后台进行；正常结果缓存 24 小时，失败至少等待 1 小时再试，限流时遵守更长的重试时间。手动强制检查可以绕过本地缓存。`pvz_status.update` 返回最近结果，不等待网络。检查本身不会暂停游戏。
+
+在安装目录的 `data/update-settings.json` 配置：
+
+```json
+{"enabled":true,"channel":"preview"}
+```
+
+`enabled:false` 关闭自动检查，手动检查仍可用。`channel` 可为 `stable`（仅正式版）或 `preview`（正式版和预览版）；配置在升级时保留。源代码运行时未配置频道，会按当前版本是否为预览版选择默认值。
+
+也可在 MCP 进程环境中设置 `PVZ_UPDATE_CHECK=0`、`PVZ_UPDATE_CHANNEL=stable` 或 `PVZ_UPDATE_CHANNEL=preview`，优先于文件配置。代理使用 `PVZ_UPDATE_PROXY`，或标准 `HTTPS_PROXY` / `HTTP_PROXY`、`NO_PROXY` 环境变量；代理功能要求 Node.js 24.5 或更新版本，EXE 安装器已内置满足要求的运行时。代理只作用于本进程，不修改系统设置。
+
+发现新版后，下载 `latest.release_url` 页面中的 EXE；如需核对文件，比较其 SHA-256 与 `latest.sha256`。关闭游戏并断开 MCP，运行安装器选择原目录，再重新连接。
