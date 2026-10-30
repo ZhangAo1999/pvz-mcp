@@ -7,6 +7,7 @@ in definitions.json and the Codex patches derived from it.
 """
 
 import json
+import hashlib
 import math
 from pathlib import Path
 import struct
@@ -14,6 +15,34 @@ import struct
 
 class StateError(ValueError):
     """Memory no longer matches the supported, bounded object layout."""
+
+
+CONVEYOR_MIN_VISIBLE_FRACTION = 0.20
+
+
+def filter_conveyor_cards(result):
+    """Match the supported EXE's SeedBank::Draw clip, in seed-bank coordinates.
+
+    0x49f1dd clips x=90..591; 0x49f250 draws packets at mX+mOffsetX.
+    Keep native slot numbers: filtering must never select a different packet.
+    Hidden packets (including their identities) are not part of the public deck.
+    """
+    visible = []
+    for card in result['cards']:
+        geometry = card.pop('_conveyor_geometry')
+        x, width, enabled = geometry
+        pixels = max(0, min(x + width, 591) - max(x, 90)) if width > 0 else 0
+        if (result['scene'] == 3 and card['occupied'] and enabled and
+                width > 0 and pixels * 5 >= width):
+            card['visibility'] = dict(x=x, width=width, visible_pixels=pixels,
+                                      visible_fraction=min(1.0, pixels / width))
+            visible.append(card)
+    result['cards'] = visible
+    result['counts']['cards'] = len(visible)
+    result['cards_revision'] = hashlib.sha256(json.dumps([
+        result['board_epoch'], result['counters']['board_updates'],
+        [(c['slot'], c['type'], c['imitator_type'], c['ready']) for c in visible]
+    ], separators=(',', ':')).encode()).hexdigest()[:24]
 
 
 _DEFINITIONS = json.loads(Path(__file__).with_name("definitions.json").read_text(encoding="utf-8"))
@@ -30,7 +59,7 @@ _POOLS = {
     "mowers": (0x118, 0x48, 0x44, 0x30),
 }
 _SUN_VALUES = {4: 25, 5: 15, 6: 50}
-_COIN_NAMES = {1: "SILVER_COIN", 2: "GOLD_COIN", 3: "DIAMOND", 4: "SUN", 5: "SMALL_SUN", 6: "LARGE_SUN"}
+_COIN_NAMES = {1: "SILVER_COIN", 2: "GOLD_COIN", 3: "DIAMOND", 4: "SUN", 5: "SMALL_SUN", 6: "LARGE_SUN",7:'FINAL_SEED_PACKET',9:'SHOVEL'}
 
 
 def _pointer(value, size=1, label="pointer"):
@@ -142,7 +171,7 @@ def _enumerate_pool(mem, board_data, kind, epoch):
                     "allocated_count": allocated, "active_count": len(result)}
 
 
-def snapshot(mem, board, epoch):
+def snapshot(mem, board, epoch, conveyor=False):
     """Decode one supported Board. Public rows/columns/card slots start at one.
 
     Entity handles include the caller's board epoch and generation bits. A new
@@ -191,13 +220,19 @@ def snapshot(mem, board, epoch):
             effective_type = imitator if type_id == 48 and imitator != -1 else type_id
             definition = _NAMES["plants"].get(effective_type, {})
             result["cards"].append({
-                "slot": index + 1, "type": type_id, "name": _name("plants", type_id),
+                "slot": index + 1, "type": type_id, "name": 'EMPTY' if type_id == -1 else _name("plants", type_id),
+                "_conveyor_geometry": (_i(card, 8) + _i(card, 0x30), _i(card, 0x10), bool(card[0x18])),
+                "occupied":type_id!=-1,"selectable_flag":type_id!=-1 and ready,
                 "imitator_type": imitator, "effective_type": effective_type,
                 "effective_name": _name("plants", effective_type), "ready": ready,
                 "refreshing": refreshing, "base_cost": definition.get("base_cost"),
                 "cooldown": {"progress": progress, "threshold": threshold,
                              "remaining_updates": max(0, threshold - progress + 1) if refreshing and not ready else 0}})
     result["counts"]["cards"] = len(result["cards"])
+    # A card slot is a position, not a stable identity. RemoveSeed compacts it.
+    result['cards_revision']=hashlib.sha256(json.dumps([
+        epoch,result['counters']['board_updates'],[(c['type'],c['imitator_type'],c['ready']) for c in result['cards']]
+    ],separators=(',',':')).encode()).hexdigest()[:24]
     wave_index, total = _i(b, 0x5594), _i(b, 0x557C)
     result["waves"] = {"next_index_native": wave_index, "spawned_count": wave_index,
                        "next_number": wave_index + 1 if 0 <= wave_index < total else None,
@@ -217,4 +252,8 @@ def snapshot(mem, board, epoch):
         "health": "Body, helmet and shield health remain separate. extra_hp_raw semantics are only partially established.",
         "omitted": ["grid items/graves", "effects/animations", "full wave schedule", "authoritative win/loss reason", "replay"],
         "layout_source": _DEFINITIONS["provenance"]["target_sha256"]}
+    if conveyor:
+        filter_conveyor_cards(result)
+    else:
+        for card in result['cards']:card.pop('_conveyor_geometry',None)
     return result

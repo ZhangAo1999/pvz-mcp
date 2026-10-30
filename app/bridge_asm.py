@@ -11,7 +11,7 @@ def assemble():
     M=dict(heartbeat=12,board=16,epoch=20,busy=24,paused=28,remaining=32,speed=36,
            completed=40,request=44,ack=48,command=52,result=56,arg0=60,arg1=64,
            arg2=68,expected_epoch=72,reply=76,scene=80,stop=84,admin_events=88,auto_pause_play=92,
-           advanced=96,total_updates=100,last_tick=104,app=112,app_busy=116,
+           advanced=96,total_updates=100,last_tick=104,intro_ui_updates=108,app=112,app_busy=116,
            level_override=120,app_heartbeat=124)
     code=bytearray(); labels={}; fix=[]
     def e(h): code.extend(bytes.fromhex(h))
@@ -36,6 +36,13 @@ def assemble():
     cmpm('auto_pause_play',1);j('0f85','auto_pause_done');cmpm('scene',3);j('0f85','auto_pause_done')
     movm('paused',1);movm('auto_pause_play',0)
     mark('auto_pause_done')
+    # Intro dialogue and shovel tutorial are decision boundaries too.
+    cmpm('scene',2);j('0f85','intro_boundary_done')
+    e('8b86a4000000 83b874090000ff');j('0f85','intro_boundary_pause')
+    e('8b869c550000 83f80f');j('0f84','intro_boundary_pause')
+    e('83f810');j('0f84','intro_boundary_pause');e('83f811');j('0f85','intro_boundary_done')
+    mark('intro_boundary_pause');movm('paused',1);movm('remaining',0)
+    mark('intro_boundary_done')
     e('8b472c 3b4730');j('0f84','simulate')
     e('837f340a');j('0f83','simulate') # app/lifecycle commands belong to the outer hook
     movm('result',0);movm('reply',0)
@@ -48,6 +55,7 @@ def assemble():
     e('83f804');j('0f84','placement')
     e('83f805');j('0f84','placement')
     e('83f806');j('0f84','sun')
+    e('83f807');j('0f84','shovel')
     seterr(1)
     mark('pause');movm('paused',1);movm('remaining',0);movm('stop',5);j('e9','ack')
     mark('resume');movm('paused',0);movm('remaining',0);j('e9','speed')
@@ -59,6 +67,18 @@ def assemble():
     mark('sun');cmpm('paused',1);j('0f85','not_paused');cmpm('scene',3);j('0f85','not_playing')
     e('8b473c 3d06270000');j('0f87','bad_arg') # <=9990
     e('898678550000 ff4758');j('e9','ack')
+
+    # Native shovel selection (Board in EBX, object type 5 in EDX) performs
+    # PICKUP -> DIG. Native tool click owns sound, removal and tutorial completion.
+    mark('shovel')
+    cmpm('paused',1);j('0f85','not_paused')
+    e('60 8bde ba05000000');native(0x41db80);e('61')
+    e('8b8650010000 83783006');j('0f85','selection_failed')
+    e('60 8bde 8b4740 8b4f44');native(0x428350)
+    e('8d4828 8b5744 6bd250 83c250 6a06 6a01 56');native(0x41cf30);e('61')
+    e('83be9c55000012');j('0f85','ack')
+    movm('paused',0);movm('auto_pause_play',1)
+    j('e9','ack')
 
     mark('placement')
     cmpm('paused',1);j('0f85','not_paused');cmpm('scene',3);j('0f85','not_playing')
@@ -98,7 +118,13 @@ def assemble():
     mark('bad_arg');seterr(5)
     mark('ack');e('8b472c 894730')
 
-    mark('simulate');e('8b5f24') # batch limit
+    mark('simulate')
+    # SCENE_LEVEL_INTRO has no combat simulation. Native CutScene::Update holds
+    # its timeline at dialogue / shovel inputs, but still updates Dave, widget
+    # dirtiness and animations. Never freeze those by skipping Board::Update.
+    # Run exactly once per outer tick, independently of the combat speed/budget.
+    cmpm('scene',2);j('0f84','intro_ui')
+    e('8b5f24') # combat batch limit
     cmpm('paused',0);j('0f84','run_batch')
     cmpm('remaining',0);j('0f84','exit')
     mark('run_batch')
@@ -125,6 +151,10 @@ def assemble():
     cmpm('paused',0);j('0f85','stop_budget')
     movm('remaining',0);j('e9','exit')
     mark('stop_budget');movm('remaining',0);movm('paused',1)
+    j('e9','exit')
+    mark('intro_ui')
+    e('80be7c01000000');j('0f85','exit') # keep native menus / pause intact
+    e('60 8bce');j('e8','trampoline');e('61 ff476c')
     mark('exit');movm('busy',0);e('619dc3')
     mark('trampoline');code.extend(stolen);j('e9',hook+len(stolen))
     mark('constructor')
@@ -155,7 +185,19 @@ def assemble():
     cmpm('command',11);j('0f84','start_game')
     cmpm('command',12);j('0f84','select_seeds')
     cmpm('command',13);j('0f84','query_seeds')
+    cmpm('command',15);j('0f84','dialogue')
     movm('result',1);j('e9','app_ack')
+    mark('dialogue')
+    e('83be2009000002');j('0f85','app_no_dialogue')
+    e('83be74090000ff');j('0f84','app_no_dialogue')
+    e('8b8668080000 85c0');j('0f84','app_no_dialogue')
+    e('8b8074010000 85c0');j('0f84','app_no_dialogue')
+    # AdvanceCrazyDaveDialog(CutScene*, false), callee pops both arguments.
+    e('60 6a00 50');native(0x448550);e('61')
+    e('83be74090000ff');j('0f85','app_ack')
+    e('8b8668080000 83b89c5500000f');j('0f84','app_ack')
+    movm('paused',0);movm('auto_pause_play',1);j('e9','app_ack')
+    mark('app_no_dialogue');movm('result',22);j('e9','app_ack')
     mark('menu')
     e('8b8e6c080000 85c9');j('0f84','menu_without_title')
     e('80b9b900000000');j('0f84','app_loading')
@@ -252,7 +294,8 @@ def assemble():
     for at,target in fix:
         va=code_va+labels[target] if isinstance(target,str) else target
         struct.pack_into('<i',code,at,va-(code_va+at+4))
-    assert len(code)<4096
+    # Runtime auto-sun stub occupies code page +0xc00 onward.
+    assert len(code)<0xc00
     data=bytearray(512);data[:4]=b'PZCT';struct.pack_into('<II',data,4,2,512)
     struct.pack_into('<I',data,M['speed'],1)
     hooks=[(hook,stolen,'entry'),(ctor,ctor_stolen,'constructor'),

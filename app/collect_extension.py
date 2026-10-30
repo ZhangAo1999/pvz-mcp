@@ -34,7 +34,7 @@ def assemble(address,mailbox,ack):
     e('807a5000');j('0f85','already')
     e('837a3c00');j('0f85','unsupported')
     e('8b4258 83f809');j('0f84','pickup')
-    e('83f801');j('0f82','unsupported');e('83f806');j('0f87','unsupported')
+    e('83f801');j('0f82','unsupported');e('83f807');j('0f87','unsupported')
     mark('pickup');e('60');j('e8',0x43e270)
     e('8b4c2414');j('e8',0x43d740);e('61') # saved EDX is the Coin pointer
     e('c7474c01000000');result(0)
@@ -53,7 +53,7 @@ def record_path(ctl):
     return DATA/'extensions'/(ctl.session.replace(':','-')+'-'+ctl.manifest['sha256'][:16]+'.json')
 
 def fallback(ctl,base):
-    needle=bytes.fromhex('817f340d0000000f84')
+    needle=bytes.fromhex('817f340f0000000f84')
     positions=[i for i in range(len(base))if base.startswith(needle,i)]
     if len(positions)!=1:raise ValueError('Unknown app dispatch layout')
     at=positions[0]+13

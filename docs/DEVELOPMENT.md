@@ -8,6 +8,7 @@
 | `app/pvz.py` | Win32 控制后端、场景与动作逻辑 |
 | `app/runtime_bridge.py` | EXE 识别、进程启动与运行时桥接加载 |
 | `app/bridge_asm.py` | 当前构建的桥接汇编、地址和调用逻辑 |
+| `app/guidance.py`、`app/interaction.py` | 上手帮助、当前阶段提示及对话/教学状态读取 |
 | `app/state.py` | 游戏对象与 JSON 状态解码 |
 | `app/collect_extension.py` | 原生拾取扩展 |
 | `app/selection.py` | 临时选关及进度保留 |

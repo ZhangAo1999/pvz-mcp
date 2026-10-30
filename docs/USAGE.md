@@ -1,6 +1,29 @@
 # MCP 调用说明
 
-调用前使用 `pvz_status` 确认游戏进程与场景。尚未运行时调用 `pvz_launch_game`；如果资源仍在加载，等待后再次查询状态。
+初次接入可先调用 `pvz_help`，无需启动或配置游戏即可获得工具用途、参数约定和流程说明。然后使用 `pvz_status` 确认游戏进程与场景。尚未运行时调用 `pvz_launch_game`；如果资源仍在加载，等待后再次查询状态。
+
+`pvz_status` 和 `pvz_get_state` 返回 `guidance.phase`、`guidance.next_actions`、`guidance.instruction`；有合适示例时还返回 `guidance.example`。这些提示说明当前阶段怎样操作，具体游戏策略由 AI 决定。只读状态查询不会推进关卡；`get_state` 暂停战斗逻辑；开场对话和铲子教学等待输入时，界面与动画仍以原生 1 倍速刷新，非交互开场动画则返回 `preparation_running`，此时等待并轮询 `status`。
+
+## 冒险 1-5：对话、铲子与传送带
+
+首次冒险包含戴夫对话、铲掉三株预放豌豆射手、后续对话和坚果保龄球。不要把它当作普通选卡种植关卡，也不要用跳过教学或直接删除植物代替原生流程。
+
+1. `interaction.phase == "dialogue"`：读取 `dialogue.text`，调用 `pvz_continue_dialogue`，传入当前 `expected_message_index` 和 `expected_board_epoch`。一次只推进一句。`raw_text` 保留游戏动画标签，`text` 已去除标签。当前只验证并开放冒险 1-5 的对话控制，商店购买等对话不支持。
+2. `interaction.phase == "shovel_tutorial"`：从 `plants` 取植物的 `id`、`row`、`col`，调用 `pvz_shovel`，同时传入 `expected_board_epoch`。每次读取新状态再挖下一株。接口会原生选择铲子、播放音效、挖除和推进教学；多层植物格暂不支持。
+3. `interaction.phase == "intro"`：无需输入，等待短暂动画后查询 `pvz_status`。关键输入点会等待操作，界面动画仍持续刷新；战斗开始会自动暂停。
+4. 战斗中 `seed_bank.kind == "conveyor"`：从 `cards` 选择 `occupied == true` 的卡片，用现有 `pvz_place_plant` 放置。必须附上当前 `cards_revision`，参数名是 `expected_cards_revision`。空槽名为 `EMPTY`，不能使用；`ready` 只是原生标记，最终合法性仍由 `pvz_can_place` / 原生放置检查。
+
+传送带示例（序号、校验值均需替换为当前快照的真实值）：
+
+```json
+{"card_slot":1,"row":3,"col":3,"expected_board_epoch":3,"expected_cards_revision":"复制当前24位校验字符串"}
+```
+
+传送带不扣阳光、不按普通卡牌冷却；用完卡片后后续槽位补位。每次放置后必须使用返回的新状态或重新查询，不能复用旧槽位信息。校验值也会在推进游戏后变化。`STALE_CARDS`、`STALE_DIALOGUE`、`STALE_ENTITY` 都表示应先重新查询，不能盲目重试。
+
+滚动坚果出现在 `plants`，不是 `projectiles`。`bowling.direction` 为 `straight`、`up` 或 `down`；斜向滚动时 `row` / `bowling.target_row` 是目标行，应结合当前 `x/y` 判断位置。爆炸坚果类型为 49，普通坚果为 3。原生格子合法性检查负责红线限制。
+
+战斗结束后，使用 `pvz_collect` 领取 `FINAL_SEED_PACKET`，再推进结算动画，检查奖励场景和存档进度。管理员改档工具仅用于用户明确授权的测试或改档，不是正常通关所必需。
 
 ## 开始关卡与选卡
 
@@ -131,3 +154,9 @@
 也可在 MCP 进程环境中设置 `PVZ_UPDATE_CHECK=0`、`PVZ_UPDATE_CHANNEL=stable` 或 `PVZ_UPDATE_CHANNEL=preview`，优先于文件配置。代理使用 `PVZ_UPDATE_PROXY`，或标准 `HTTPS_PROXY` / `HTTP_PROXY`、`NO_PROXY` 环境变量；代理功能要求 Node.js 24.5 或更新版本，EXE 安装器已内置满足要求的运行时。代理只作用于本进程，不修改系统设置。
 
 发现新版后，下载 `latest.release_url` 页面中的 EXE；如需核对文件，比较其 SHA-256 与 `latest.sha256`。关闭游戏并断开 MCP，运行安装器选择原目录，再重新连接。
+
+### 传送带卡牌可见门槛
+
+传送带的 `cards` 只返回已露出至少整张卡牌宽度 20% 的非空卡牌。生成但仍藏在入口后的卡牌不会返回，也不能通过猜测卡槽提前使用。`visibility.visible_fraction` 表示实际露出比例，`seed_bank.min_visible_fraction` 为最低门槛。空列表时可先以 1 倍速推进一小段，再重新查询。
+
+过滤后仍保留原生 `slot`，它可能不连续；放置时使用卡牌的 `slot`，不要用数组下标。每次使用后重新读取 `cards_revision`。普通选卡关卡不受此限制。

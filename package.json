@@ -1,6 +1,6 @@
 {
   "name": "pvz-mcp-local",
-  "version": "0.3.2-preview.1",
+  "version": "0.3.3-preview.3",
   "private": true,
   "type": "module",
   "license": "GPL-3.0-only",

@@ -9,6 +9,8 @@ from pathlib import Path
 import msvcrt
 import presentation as spectator
 import selection
+import guidance
+import interaction
 
 from paths import APP, DATA
 ROOT=APP
@@ -151,7 +153,7 @@ class Controller:
         for name,val in [('command',cmd),('arg0',arg0),('arg1',arg1),('arg2',arg2),('expected_epoch',epoch)]:self.mem.put(self.base+self.M[name],val)
         self.mem.put(self.base+self.M['request'],seq)
         mb=self.wait(lambda m:m['ack']==seq and m['busy']==0 and not m.get('app_busy',0))
-        errors={1:'UNKNOWN_COMMAND',2:'STALE_BOARD_EPOCH',3:'PAUSE_REQUIRED',4:'NOT_PLAYING',5:'INVALID_ARGUMENT',6:'ILLEGAL_GRID',7:'CARD_UNAVAILABLE',8:'UNSUPPORTED_MODE',9:'CURSOR_BUSY',10:'CARD_SELECTION_FAILED',11:'LOADING',12:'MENU_REQUIRED',13:'NO_PROFILE',14:'NOT_CHOOSING_SEEDS',15:'CHOOSER_BUSY',16:'WRONG_DECK_SIZE',17:'FIXED_SEEDS',18:'SEED_UNAVAILABLE',20:'STALE_ENTITY',21:'UNSUPPORTED_PICKUP'}
+        errors={1:'UNKNOWN_COMMAND',2:'STALE_BOARD_EPOCH',3:'PAUSE_REQUIRED',4:'NOT_PLAYING',5:'INVALID_ARGUMENT',6:'ILLEGAL_GRID',7:'CARD_UNAVAILABLE',8:'UNSUPPORTED_MODE',9:'CURSOR_BUSY',10:'CARD_SELECTION_FAILED',11:'LOADING',12:'MENU_REQUIRED',13:'NO_PROFILE',14:'NOT_CHOOSING_SEEDS',15:'CHOOSER_BUSY',16:'WRONG_DECK_SIZE',17:'FIXED_SEEDS',18:'SEED_UNAVAILABLE',20:'STALE_ENTITY',21:'UNSUPPORTED_PICKUP',22:'NO_DIALOGUE'}
         if mb['result']:fail(errors.get(mb['result'],'NATIVE_ERROR'),'Game rejected the command',{'native_result':mb['result'],'native_reply':mb['reply'],'board_epoch':mb['epoch'],'request':seq})
         return mb
     def pause(self):return self.command(1)
@@ -162,19 +164,24 @@ class Controller:
             except PvZError as ex:
                 if ex.code not in ['NO_BOARD','BOARD_CHANGED']:raise
                 current=self.status()
-                return dict(board=None,board_epoch=None,session_id=self.session,scene=current['scene'],status=current)
+                value=dict(board=None,board_epoch=None,session_id=self.session,scene=current['scene'],status=current)
+                value['guidance']=guidance.hints(value);return value
             if start['request']!=start['ack']:
                 fail('PENDING_COMMAND','A command is queued; its outcome must be acknowledged before returning state',{'mailbox':start})
             if self.mem.i32(start['app']+0x920)==2:
                 current=self.status();chooser=self.mem.u32(start['app']+0x874)
-                return dict(board_epoch=start['epoch'],session_id=self.session,scene=2,level=self.mem.i32(b+0x5568),
-                    seed_selection=self.seed_choices() if chooser and self.mem.read(chooser+0x65,1)[0] else None,
-                    status=current,preparation_running=True,
-                    note='Native intro is running. Gameplay will pause automatically on its first playing boundary.')
+                ctx=interaction.read(self.mem,start['app'],b)
+                if not ctx['input_required']:
+                    value=dict(board_epoch=start['epoch'],session_id=self.session,scene=2,level=self.mem.i32(b+0x5568),
+                        seed_selection=self.seed_choices() if chooser and self.mem.read(chooser+0x65,1)[0] else None,
+                        interaction=ctx,status=current,preparation_running=True)
+                    value['guidance']=guidance.hints(value);return value
             if start.get('app_busy',0):time.sleep(.001);continue
             if start['paused']!=1 or start['remaining'] or start['busy']:self.pause();b,start=self.board()
             if start.get('app_busy',0):continue
-            try:result=snapshot(self.mem,b,start['epoch'])
+            try:
+                ctx=interaction.read(self.mem,start['app'],b)
+                result=snapshot(self.mem,b,start['epoch'],conveyor=ctx['conveyor'])
             except StateError:
                 if self.mailbox().get('app_heartbeat')!=start.get('app_heartbeat'):continue
                 raise
@@ -182,10 +189,26 @@ class Controller:
             if (end['board'],end['epoch'],end['completed'],end['request'],end['ack'],end['busy'],end['paused'],end['remaining'],end.get('app_busy',0),end.get('app_heartbeat'))==(b,start['epoch'],start['completed'],start['request'],start['request'],0,1,0,0,start.get('app_heartbeat')):
                 result.update(session_id=self.session,board_epoch=start['epoch'],game_build=self.manifest['sha256'],
                     controller={key:end[key] for key in ['paused','remaining','speed','completed','advanced','stop','admin_events']},
-                    consistency='paused Board::Update; unchanged App update heartbeat; command lock held',
+                    consistency=('combat paused; intro UI runs at native 1x; unchanged App update heartbeat; command lock held' if result['scene']==2 else 'paused Board::Update; unchanged App update heartbeat; command lock held'),
                     coordinate_system='rows, columns and card slots are 1-based')
                 app=start['app'];chooser=self.mem.u32(app+0x874)
                 if chooser and self.mem.read(chooser+0x65,1)[0]:result['seed_selection']=self.seed_choices()
+                result['interaction']=ctx;result['dialogue']=ctx['dialogue']
+                result['intro_ui_running']=result['scene']==2 and not result['game_pause_flag']
+                result['seed_bank']=dict(kind='conveyor' if ctx['conveyor'] else 'normal',
+                    consumes_sun=not ctx['conveyor'],card_consumed_on_use=ctx['conveyor'])
+                if ctx['conveyor']:
+                    from state import CONVEYOR_MIN_VISIBLE_FRACTION
+                    result['seed_bank']['min_visible_fraction']=CONVEYOR_MIN_VISIBLE_FRACTION
+                if ctx['bowling']:
+                    for plant in result['plants']:
+                        if plant['type'] in (3,49,50):
+                            plant['bowling']=dict(direction={28:'up',29:'down',0:'straight'}.get(plant['state'],'other'),
+                                vy={28:-2,29:2}.get(plant['state'],0),target_row=plant['row'],
+                                hit_count_raw=plant['attack_countdown'])
+                    result['coverage']['bowling']='Rolling nuts are plants. row/target_row is the native destination row while moving vertically; x/y is current position. vy is pixels per update. hit_count_raw only increments when native coin-reward rules permit it.'
+                if result['scene']==2:result['coverage']['zombies']='Intro zombies are previews, not active combat targets.'
+                result['guidance']=guidance.hints(result)
                 return result
         fail('UNSTABLE_SNAPSHOT','Game changed while reading; request a fresh snapshot')
     def status(self):
@@ -201,6 +224,7 @@ class Controller:
             if not after.get('app_busy',0) and after.get('app_heartbeat')==before.get('app_heartbeat'):
                 last['status_consistency']='unchanged App update heartbeat'
                 last['presentation']=spectator.progress(last)
+                last['guidance']=guidance.hints(dict(scene=last['scene'],interaction=last.get('interaction',{})))
                 return last
         fail('UNSTABLE_STATUS','App changed while reading status; request again')
     def _status_unchecked(self):
@@ -229,10 +253,12 @@ class Controller:
         replay=selection.current(self)
         if replay:scene_info['replay_context']=dict(selected_level=replay['selected_level'],retained_progress_level=replay['original_level'])
         return dict(running=True,pid=self.pid,session_id=self.session,game=self.manifest['game'],game_build=self.manifest['sha256'],bridge=mb,
+            interaction=interaction.read(self.mem,app,board) if current_board else {},
             scene=scene_info,capabilities=['launch','menu_status','native_mode_start','adventure_current_progress_by_default',
                 'explicit_adventure_level_selection','paused_json','bounded_advance','native_rule_planting_adventure',
                 'native_rule_planting_zombotany','seed_selection_adventure_zombotany','normal_pickup_sun_money_shovel',
-                'spectator_hud','spectator_commentary','asynchronous_bounded_advance','adjustable_speed_while_advancing','admin_sun','speed_1_to_32'],replay=False)
+                'spectator_hud','spectator_commentary','asynchronous_bounded_advance','adjustable_speed_while_advancing','admin_sun','speed_1_to_32',
+                'dialogue','shovel','conveyor_cards','contextual_help'],replay=False)
     def modes(self):
         catalog=json.loads((ROOT/'modes.json').read_text(encoding='utf-8'))
         verified={}
@@ -310,7 +336,7 @@ class Controller:
         end=time.monotonic()+15
         while time.monotonic()<end:
             current=self.status()
-            if current['scene']['code']==3 or current['scene'].get('choosing_seeds'):break
+            if current['scene']['code']==3 or current['scene'].get('choosing_seeds') or current.get('interaction',{}).get('input_required'):break
             time.sleep(.02)
         current=self.status()
         state=self.state() if current['scene']['board_attached'] else None
@@ -460,6 +486,7 @@ class Controller:
             save_sha256=receipt['after_sha256'],changed_save_byte_offsets=[i for i,(a,b) in enumerate(zip(data,actual))if a!=b],
             status=self.status())
     def dispatch(self,method,params):
+        if method=='help':return guidance.help_info()
         if method=='status':return self.status()
         if method=='get_save_info':return self.get_save_info()
         if method=='admin_set_progress':return self.set_adventure_progress(params)
@@ -476,12 +503,34 @@ class Controller:
         if method=='pause':
             if self.status()['scene']['board_attached']:self.pause()
             return self.state()
-        b,mb=self.board();epoch=self.check_epoch(params,mb,method in ['can_place','place_plant','admin_set_sun','collect'])
+        b,mb=self.board();epoch=self.check_epoch(params,mb,method in ['can_place','place_plant','admin_set_sun','collect','continue_dialogue','shovel'])
+        if method=='continue_dialogue':
+            current=self.state();ctx=current.get('interaction',{})
+            if ctx.get('phase')!='dialogue':fail('NO_DIALOGUE','Read state and follow guidance; no Dave dialogue is active')
+            if current.get('mode')!=0 or current.get('level')!=5:
+                fail('UNSUPPORTED_DIALOGUE','This adapter has verified dialogue control only in adventure 1-5; purchases and other scripted dialogs need separate support')
+            expected=integer(params,'expected_message_index',0,10000)
+            if expected!=ctx['dialogue']['message_index']:fail('STALE_DIALOGUE','The dialogue changed; read fresh state')
+            self.command(15,expected,epoch=epoch)
+            return dict(continued=True,previous_message_index=expected,state=self.state())
+        if method=='shovel':
+            current=self.state();ctx=current.get('interaction',{})
+            if not ctx.get('shovel',{}).get('available'):fail('SHOVEL_UNAVAILABLE','Shovel unavailable in this phase/mode')
+            row=integer(params,'row',1,current.get('terrain',{}).get('playable_rows') or 5);col=integer(params,'col',1,9)
+            plant=next((x for x in current.get('plants',[]) if x['id']==params.get('plant_id') and x['row']==row and x['col']==col),None)
+            if plant is None:fail('STALE_ENTITY','Read fresh plants and supply matching plant_id, row and col')
+            # This first shovel API supports ordinary single-layer ground plants.
+            cell=[x for x in current['plants'] if x['row']==row and x['col']==col]
+            if len(cell)!=1:fail('UNSUPPORTED_LAYER','Layered plants need a separate audited shovel target policy')
+            self.command(7,0,row-1,col-1,epoch)
+            after=self.state()
+            if any(x['id']==plant['id'] for x in after.get('plants',[])):fail('NATIVE_SHOVEL_FAILED','Native shovel did not remove the target; inspect state')
+            return dict(removed=True,plant_id=plant['id'],state=after)
         if method=='collect':
             current=self.state();coin_id=params.get('coin_id')
             coin=next((x for x in current.get('coins',[])if x['id']==coin_id),None)
             if coin is None:fail('STALE_ENTITY','Pickup no longer exists; read state again')
-            if coin['type'] not in [1,2,3,4,5,6,9]:fail('UNSUPPORTED_PICKUP','Only normal money/sun pickups and the shovel reward are currently supported')
+            if coin['type'] not in [1,2,3,4,5,6,7,9]:fail('UNSUPPORTED_PICKUP','Only money/sun, final seed packet and shovel rewards are supported')
             if coin['collecting']:return dict(collected=False,already_collecting=True,state=current)
             from collect_extension import install
             install(self);self.command(14,coin['handle'],epoch=epoch)
@@ -543,10 +592,20 @@ class Controller:
             return dict(requested_updates=ticks,requested_game_ms=game_ms,advanced_updates=actual_updates,board_update_delta=delta,stop_reason=reason,state=final,status=self.status() if final is None else None)
         if method in ['can_place','place_plant']:
             self.pause();b,now=self.board();self.check_epoch(params,now,True);current=self.state()
+            if current.get('scene')!=3:fail('NOT_PLAYING','Follow current guidance before planting',{'guidance':current.get('guidance')})
             if current['mode'] not in [0,16]:fail('UNSUPPORTED_MODE','Normal planting supports adventure and Zombotany')
+            conveyor=current.get('seed_bank',{}).get('kind')=='conveyor'
+            if conveyor and params.get('expected_cards_revision')!=current.get('cards_revision'):
+                fail('STALE_CARDS','Conveyor slots shift after use. Read fresh state and pass expected_cards_revision',{'cards_revision':current.get('cards_revision')})
+            slot=integer(params,'card_slot',1,10)
+            card=next((c for c in current['cards'] if c['slot']==slot),None)
+            if card is None:
+                if conveyor:
+                    fail('CARD_NOT_VISIBLE','This slot is not in the visible conveyor cards. Wait until at least 20% of the card is exposed, then read fresh state.')
+                fail('CARD_UNAVAILABLE','This card slot is unavailable')
             rows=6 if self.mem.i32(b+0x5564) in [2,3] else 5
             if self.mem.i32(b+0x5564) not in range(6):fail('UNSUPPORTED_BACKGROUND','This background has not been verified')
-            row=integer(params,'row',1,rows);col=integer(params,'col',1,9);slot=integer(params,'card_slot',1,len(current['cards']))
+            row=integer(params,'row',1,rows);col=integer(params,'col',1,9)
             if method=='can_place':
                 try:self.command(4,slot-1,row-1,col-1,epoch);return dict(can_place=True,board_epoch=epoch,card_slot=slot,row=row,col=col)
                 except PvZError as ex:
@@ -563,6 +622,7 @@ class Controller:
         fail('UNKNOWN_METHOD','Unknown tool method '+method)
     def execute(self,method,params):
         if not isinstance(params,dict):fail('INVALID_ARGUMENT','params must be an object')
+        if method=='help':return guidance.help_info()
         with exclusive():
             if method=='launch_game':
                 result=self.launch();spectator.optional('overlay',spectator.ensure_overlay);return result
