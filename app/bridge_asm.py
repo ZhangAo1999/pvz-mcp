@@ -7,7 +7,7 @@ stolen=bytes.fromhex('6aff6815e96e00')
 code_va=CODE_VA
 data_va=DATA_VA
 
-def assemble():
+def assemble(legacy=False):
     M=dict(heartbeat=12,board=16,epoch=20,busy=24,paused=28,remaining=32,speed=36,
            completed=40,request=44,ack=48,command=52,result=56,arg0=60,arg1=64,
            arg2=68,expected_epoch=72,reply=76,scene=80,stop=84,admin_events=88,auto_pause_play=92,
@@ -126,7 +126,7 @@ def assemble():
     cmpm('scene',2);j('0f84','intro_ui')
     e('8b5f24') # combat batch limit
     cmpm('paused',0);j('0f84','run_batch')
-    cmpm('remaining',0);j('0f84','exit')
+    cmpm('remaining',0);j('0f84','exit' if legacy else 'paused_ui')
     mark('run_batch')
     e('8b86a4000000 39b068080000');j('0f85','board_gone')
     e('8b8020090000 894750')
@@ -291,11 +291,27 @@ def assemble():
     mark('finish_seed_animations');e('60 33db')
     mark('finish_seed_loop');e('6bc33c 8d8405bc000000 8bcd');native(0x49ab30)
     e('43 83fb31');j('0f82','finish_seed_loop');e('61c3')
+    if not legacy:
+        # Audited native Board::Update UI subset (0x421216..0x421304).
+        # Refresh mouse-over and menu/store buttons without CutScene, effects,
+        # entities, wave timers, sun or cooldown updates. App/dialog UI still runs.
+        mark('paused_ui');e('60 8bee 8bc6');native(0x41a780)
+        e('80bd7c01000000');j('0f85','paused_ui_done')
+        e('8bf5');native(0x41e5b0)
+        e('b301 84c0');j('0f84','paused_ui_buttons')
+        e('80bd6801000000');j('0f85','paused_ui_buttons');e('32db')
+        mark('paused_ui_buttons');e('8b8560010000 85c0');j('0f84','paused_ui_store')
+        e('80b80501000000');j('0f85','paused_ui_menu_update')
+        e('885822')
+        mark('paused_ui_menu_update');e('8bf0');native(0x453010)
+        mark('paused_ui_store');e('8b8564010000 85c0');j('0f84','paused_ui_done')
+        e('885822 8bf0');native(0x453010)
+        mark('paused_ui_done');e('61');j('e9','exit')
     for at,target in fix:
         va=code_va+labels[target] if isinstance(target,str) else target
         struct.pack_into('<i',code,at,va-(code_va+at+4))
-    # Runtime auto-sun stub occupies code page +0xc00 onward.
-    assert len(code)<0xc00
+    # Leave the final 512 bytes for the auto-sun stub.
+    assert len(code)<0xe00
     data=bytearray(512);data[:4]=b'PZCT';struct.pack_into('<II',data,4,2,512)
     struct.pack_into('<I',data,M['speed'],1)
     hooks=[(hook,stolen,'entry'),(ctor,ctor_stolen,'constructor'),

@@ -84,7 +84,7 @@ def launch(path,manifest,verify_only=False):
             if read(target,len(expected))!=expected:raise ValueError('Original hook signature differs: '+hex(target))
         write(address,code);write(assembled['data_va'],mailbox)
         if manifest.get('auto_sun',True):
-            target=0x43cc10;expected=bytes.fromhex('83ec20538bd8');stub_address=address+0xc00
+            target=0x43cc10;expected=bytes.fromhex('83ec20538bd8');stub_address=address+0xe00
             if read(target,6)!=expected:raise ValueError('Sun update signature differs')
             # Same native sound/collection sequence, recalculated for this process allocation.
             stub=bytearray.fromhex('9c60837858040f8247000000837858060f873d000000807838000f8533000000807850000f852900000083783c000f851f0000008b1083ba20090000030f85100000008bd0e826f2beff8b4c241ce8ede6beff619d83ec20538bd8e9b6dbbeff')

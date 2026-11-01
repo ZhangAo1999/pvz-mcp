@@ -11,7 +11,7 @@ import hashlib,json,struct
 from pathlib import Path
 from paths import DATA
 
-def assemble(address,mailbox,ack):
+def assemble(address,mailbox,ack,legacy=False):
     code=bytearray();labels={};fix=[]
     def e(h):code.extend(bytes.fromhex(h))
     def u(n):code.extend(struct.pack('<I',n&0xffffffff))
@@ -34,6 +34,9 @@ def assemble(address,mailbox,ack):
     e('807a5000');j('0f85','already')
     e('837a3c00');j('0f85','unsupported')
     e('8b4258 83f809');j('0f84','pickup')
+    if not legacy:
+        for type_id in (15,18,20):
+            e('83f8%02x'%type_id);j('0f84','pickup')
     e('83f801');j('0f82','unsupported');e('83f807');j('0f87','unsupported')
     mark('pickup');e('60');j('e8',0x43e270)
     e('8b4c2414');j('e8',0x43d740);e('61') # saved EDX is the Coin pointer
@@ -69,7 +72,7 @@ def verify(ctl,base,actual):
     r=json.loads(file.read_text(encoding='utf-8'))
     at,old=fallback(ctl,base)
     if r['session_id']!=ctl.session or r['build']!=ctl.manifest['sha256'] or r['patch_offset']!=at:raise ValueError('Live extension identity differs')
-    stub=assemble(r['address'],ctl.base,ctl.manifest['labels']['app_ack'])
+    stub=assemble(r['address'],ctl.base,ctl.manifest['labels']['app_ack'],legacy=r.get('version',1)==1)
     patch=b'\xe9'+struct.pack('<i',r['address']-(ctl.manifest['code_va']+at+5))+b'\x90'*7
     expected=bytearray(base);expected[at:at+12]=patch
     if actual!=expected or ctl.mem.read(r['address'],len(stub))!=stub:raise ValueError('Live pickup extension differs')
@@ -77,9 +80,10 @@ def verify(ctl,base,actual):
 
 def install(ctl):
     from bridge_asm import assemble as assemble_bridge
-    base=assemble_bridge()[0]
+    base=getattr(ctl,'bridge_code',None) or assemble_bridge()[0]
     actual=ctl.mem.read(ctl.manifest['code_va'],len(base))
-    if verify(ctl,base,actual):return
+    if verify(ctl,base,actual):
+        if json.loads(record_path(ctl).read_text(encoding='utf-8')).get('version',1)>=2:return
     mb=ctl.mailbox()
     if mb['paused']!=1 or mb['remaining'] or mb['request']!=mb['ack'] or mb['busy']:
         raise ValueError('Pickup installation requires a paused board and idle mailbox')
@@ -95,7 +99,7 @@ def install(ctl):
     if not k.VirtualProtectEx(ctl.handle,address,4096,0x20,C.byref(old)):raise OSError(C.get_last_error(),'Cannot protect pickup code')
     if not k.FlushInstructionCache(ctl.handle,address,len(stub)):raise OSError(C.get_last_error(),'Cannot flush pickup code')
     patch=b'\xe9'+struct.pack('<i',address-(ctl.manifest['code_va']+at+5))+b'\x90'*7
-    r=dict(session_id=ctl.session,build=ctl.manifest['sha256'],address=address,patch_offset=at,
+    r=dict(version=2,session_id=ctl.session,build=ctl.manifest['sha256'],address=address,patch_offset=at,
         original=original.hex(),replacement=patch.hex(),code=stub.hex(),sha256=hashlib.sha256(stub).hexdigest(),
         writes='RX extension and idle unknown-command branch only; no game resource/progress fields')
     file=record_path(ctl);file.parent.mkdir(parents=True,exist_ok=True)

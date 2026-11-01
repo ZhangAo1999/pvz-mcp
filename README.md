@@ -2,7 +2,7 @@
 
 通过 MCP 让 AI 游玩《植物大战僵尸》：读取游戏状态，自主决定种植位置和等待时间，再通过工具执行操作。整个过程可以不看画面、不操作鼠标。
 
-当前版本：`0.3.3-preview.3`，支持 Windows x64 上运行的特定 **1.2.0.1073** 构建。
+当前版本：`0.3.4-preview.1`，支持 Windows x64 上运行的特定 **1.2.0.1073** 构建。
 
 本项目提供工具源码和安装脚本，不包含游戏文件、资源或存档。使用者需要自行准备兼容的游戏，以及支持本地 stdio MCP 的 AI 客户端。
 
@@ -95,7 +95,7 @@ Get-FileHash -LiteralPath 'D:\Games\PvZ\PlantsVsZombies.exe' -Algorithm SHA256
 
 ## MCP 工具列表
 
-当前提供 **22 个工具**。具体操作受当前场景、模式和解锁状态限制。
+当前提供 **23 个工具**。具体操作受当前场景、模式和解锁状态限制。
 
 | 工具 | 用途 |
 | --- | --- |
@@ -114,8 +114,9 @@ Get-FileHash -LiteralPath 'D:\Games\PvZ\PlantsVsZombies.exe' -Algorithm SHA256
 | `pvz_resume` | 持续运行，可指定倍速 |
 | `pvz_select_seeds` | 按实际解锁情况选择卡组并开始 |
 | `pvz_can_place` | 检查卡槽、费用、冷却和格子合法性 |
-| `pvz_place_plant` | 普通关卡扣阳光并触发冷却；1-5 传送带消耗卡牌 |
-| `pvz_collect` | 拾取已有阳光、钱币、最终植物卡片或铲子奖励 |
+| `pvz_place_plant` | 普通关卡扣阳光并触发冷却；传送带关卡消耗卡牌 |
+| `pvz_collect` | 拾取阳光、钱币、植物卡片、铲子、来信、奖励钱袋和钻石袋 |
+| `pvz_read_letter` | 返回当前来信的中文文字、摘要及转录来源，无需识图 |
 | `pvz_set_presentation` | 设置倍速、观战提示、说明保留时间和默认推进时长 |
 | `pvz_set_commentary` | 显示 AI 的简短打算和本次操作说明 |
 | `pvz_get_save_info` | 只读查询当前用户存档、进度和校验信息 |
@@ -169,3 +170,11 @@ Copyright (c) 2026 **ZhangAo1999**。原项目：<https://github.com/ZhangAo1999
 已发布的 `0.3.1-preview.1` 保留其 MIT 许可。第三方依赖遵循各自许可证，见[第三方声明](THIRD-PARTY-NOTICES.txt)。
 
 本项目与 EA / PopCap 无隶属或授权关系。使用工具仍需遵守适用的游戏许可协议及法律。
+
+### 奖励与信件
+
+pvz_collect 支持普通阳光、金币、最终种子包、铲子，以及僵尸来信（类型 15）、奖励钱袋（18）和钻石袋（20）。领取后使用 pvz_advance 播放原生过关动画。
+
+pvz_read_letter 可以读取地上或奖励页当前信件的中文文字和摘要，无需模型识图。文字来自本版本游戏图片的人工转录，保留原文错别字；未确认的文字会明确标记。状态也会返回 rewards / award.letter。
+
+新启动的游戏在 AI 暂停时保留菜单按钮交互，战斗、阳光生产及冷却继续冻结。更新前已经运行的旧桥接可继续读取状态及领取奖励；菜单修复需下一次通过 MCP 启动游戏后生效。

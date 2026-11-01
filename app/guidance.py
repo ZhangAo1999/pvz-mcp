@@ -14,7 +14,8 @@ def help_info():
             pvz_place_plant='Use a current card_slot with board_epoch. Conveyor returns only cards with at least 20% of their width exposed. Use the returned native slot number, never array index; hidden slots are rejected. Pass expected_cards_revision and reread after every use.',
             pvz_advance='duration_ms is GAME time, in multiples of 10. Default speed 1. wait=false returns ETA; poll status, not get_state, while waiting.',
             pvz_get_state='Pauses combat. Intro/dialogue/shovel UI continues at native 1x while waiting for inputs. Snapshots are checked between App updates. During noninteractive intro poll status.',
-            pvz_collect='Use a current coin_id; no spawning. Reward pickups supported only as reported by the tool.',
+            pvz_collect='Use a current coin_id; no spawning. Supports sun/money, final seed packets, shovel, zombie letters (type 15), money bags (18), diamond bags (20). Collect then advance to settle.',
+            pvz_read_letter='Read an on-lawn or displayed zombie letter as accessible Chinese text. Uses verified image transcription, not OCR. Does not collect or dismiss the letter.',
             pvz_admin_set_progress='Administrator save edit, separate from normal play; backups and current save/session guards required.'),
         rules=['No automatic strategy loop is built into these tools; the client AI makes decisions.',
                'admin_set_sun and admin_set_progress are administrator actions; normal gameplay does not require them.',
@@ -26,7 +27,7 @@ def hints(value):
     if isinstance(scene,dict):scene=scene.get('code')
     phase=value.get('interaction',{}).get('phase')
     chooser=value.get('seed_selection')
-    reward=next((x for x in value.get('coins',[]) if x.get('type') in (7,9)),None) if scene==3 else None
+    reward=next((x for x in value.get('coins',[]) if x.get('type') in (7,9,15,18,20)),None) if scene==3 else None
     if reward:
         phase='settling' if reward.get('collecting') else 'reward_pickup'
         actions=['pvz_advance'] if reward.get('collecting') else ['pvz_collect']
@@ -44,7 +45,8 @@ def hints(value):
     elif scene==1:
         actions=['pvz_start_game','pvz_list_modes'];note='Start adventure without level to use saved progress. Explicit level selects a replay.'
     elif scene==5:
-        actions=['pvz_return_to_menu','pvz_start_game'];note='Level award screen. Return to menu and start adventure without level to follow saved progress.'
+        actions=['pvz_read_letter','pvz_return_to_menu','pvz_start_game'] if (value.get('award') or {}).get('letter') else ['pvz_return_to_menu','pvz_start_game']
+        note='Letter screen: use pvz_read_letter for accessible text. Leave the screen open for viewing; return to menu only when finished.' if (value.get('award') or {}).get('letter') else 'Level award screen. Return to menu and start adventure without level to follow saved progress.'
     else:
         actions=['pvz_status'];note='Inspect readiness; if not running use pvz_launch_game. pvz_help explains all workflows.'
     ctx=value.get('interaction',{})

@@ -11,6 +11,7 @@ import presentation as spectator
 import selection
 import guidance
 import interaction
+import rewards
 
 from paths import APP, DATA
 ROOT=APP
@@ -120,10 +121,16 @@ class Controller:
         try:
             if self.mem.read(self.base,8)!=b'PZCT'+struct.pack('<I',self.manifest['version']):fail('BRIDGE_MISMATCH','The running game has no matching controller bridge. Launch the original game using pvz_launch_game so the runtime bridge is loaded.')
             from bridge_asm import assemble
-            code=assemble()[0]
             from collect_extension import verify
-            try:verify(self,code,self.mem.read(self.manifest['code_va'],len(code)))
-            except ValueError as ex:fail('BRIDGE_MISMATCH',str(ex))
+            # Existing paused games remain readable/collectible across this
+            # upgrade. Only a new launch enables the menu UI subset.
+            for legacy in (False,True):
+                code=assemble(legacy=legacy)[0]
+                try:verify(self,code,self.mem.read(self.manifest['code_va'],len(code)))
+                except ValueError:
+                    continue
+                self.bridge_code=code;self.paused_menu_ui=not legacy;break
+            else:fail('BRIDGE_MISMATCH','Unrecognized live bridge code')
             spectator.optional('identity',spectator.identity,self)
         except Exception:self.close();raise
     def close(self):
@@ -164,7 +171,7 @@ class Controller:
             except PvZError as ex:
                 if ex.code not in ['NO_BOARD','BOARD_CHANGED']:raise
                 current=self.status()
-                value=dict(board=None,board_epoch=None,session_id=self.session,scene=current['scene'],status=current)
+                value=dict(board=None,board_epoch=None,session_id=self.session,scene=current['scene'],status=current,award=current.get('award'))
                 value['guidance']=guidance.hints(value);return value
             if start['request']!=start['ack']:
                 fail('PENDING_COMMAND','A command is queued; its outcome must be acknowledged before returning state',{'mailbox':start})
@@ -194,6 +201,7 @@ class Controller:
                 app=start['app'];chooser=self.mem.u32(app+0x874)
                 if chooser and self.mem.read(chooser+0x65,1)[0]:result['seed_selection']=self.seed_choices()
                 result['interaction']=ctx;result['dialogue']=ctx['dialogue']
+                result['rewards']=[r for r in (rewards.lawn_reward(c,result['level'],result['mode']) for c in result['coins']) if r]
                 result['intro_ui_running']=result['scene']==2 and not result['game_pause_flag']
                 result['seed_bank']=dict(kind='conveyor' if ctx['conveyor'] else 'normal',
                     consumes_sun=not ctx['conveyor'],card_consumed_on_use=ctx['conveyor'])
@@ -253,6 +261,8 @@ class Controller:
         replay=selection.current(self)
         if replay:scene_info['replay_context']=dict(selected_level=replay['selected_level'],retained_progress_level=replay['original_level'])
         return dict(running=True,pid=self.pid,session_id=self.session,game=self.manifest['game'],game_build=self.manifest['sha256'],bridge=mb,
+            paused_menu_ui=getattr(self,'paused_menu_ui',False),
+            award=rewards.award_info(scene,mode,scene_info.get('profile_adventure_level')),
             interaction=interaction.read(self.mem,app,board) if current_board else {},
             scene=scene_info,capabilities=['launch','menu_status','native_mode_start','adventure_current_progress_by_default',
                 'explicit_adventure_level_selection','paused_json','bounded_advance','native_rule_planting_adventure',
@@ -489,6 +499,15 @@ class Controller:
         if method=='help':return guidance.help_info()
         if method=='status':return self.status()
         if method=='get_save_info':return self.get_save_info()
+        if method=='read_letter':
+            current=self.state()
+            letter=(current.get('award') or {}).get('letter')
+            if not letter:
+                letter=next((r.get('letter') for r in current.get('rewards',[]) if r.get('letter')),None)
+            if not letter:fail('NO_LETTER','No verified zombie letter is currently on the lawn or award screen')
+            return dict(letter=letter,scene=current['scene'],board_epoch=current.get('board_epoch'),
+                displayed=bool((current.get('award') or {}).get('letter')),
+                instruction='Read this text without vision. On the lawn collect the letter coin_id, then advance to show it. Reading does not collect or dismiss it.')
         if method=='admin_set_progress':return self.set_adventure_progress(params)
         if method=='set_presentation':return self.set_presentation(params)
         if method=='set_commentary':
@@ -530,7 +549,7 @@ class Controller:
             current=self.state();coin_id=params.get('coin_id')
             coin=next((x for x in current.get('coins',[])if x['id']==coin_id),None)
             if coin is None:fail('STALE_ENTITY','Pickup no longer exists; read state again')
-            if coin['type'] not in [1,2,3,4,5,6,7,9]:fail('UNSUPPORTED_PICKUP','Only money/sun, final seed packet and shovel rewards are supported')
+            if coin['type'] not in rewards.PICKUP_TYPES:fail('UNSUPPORTED_PICKUP','Supported pickups: sun/money, seed packet, shovel, zombie letter, award money/diamond bags')
             if coin['collecting']:return dict(collected=False,already_collecting=True,state=current)
             from collect_extension import install
             install(self);self.command(14,coin['handle'],epoch=epoch)
