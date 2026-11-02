@@ -35,13 +35,13 @@ class InstallerConfigurationTests(unittest.TestCase):
         self.assertEqual(Path(result['previous_configuration_backup']).read_bytes(),previous)
         self.assertFalse((self.root/'bridge-manifest.json').exists())
     def test_unconfigured_status_is_a_normal_response(self):
-        with patch.object(pvz,'DATA',self.root),patch.object(pvz,'exclusive',return_value=contextlib.nullcontext()):
+        with patch.object(pvz,'DATA',self.root),patch.object(pvz,'exclusive',return_value=contextlib.nullcontext()),patch('discovery.enumerate_games',return_value=[]):
             ctl=pvz.Controller()
             status=ctl.execute('status',{})
             self.assertFalse(status['running'])
-            self.assertEqual(status['reason'],'GAME_NOT_CONFIGURED')
+            self.assertEqual(status['reason'],'NOT_RUNNING')
             response=pvz.response(ctl,dict(id=1,method='launch_game',params={}))
-            self.assertEqual(response['error']['code'],'GAME_NOT_CONFIGURED')
+            self.assertEqual(response['error']['code'],'GAME_PATH_REQUIRED')
             self.assertIn('modes',ctl.execute('list_modes',{}))
 
 if __name__=='__main__':unittest.main()

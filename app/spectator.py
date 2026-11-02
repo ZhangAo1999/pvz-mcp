@@ -47,7 +47,7 @@ class ReadOnlyGame:
     def __init__(self):
         self.handle=None;self.identity=None;self.window=None;self.last_search=-10
         self.manifest=ui.read_json(ui.ROOT/'bridge-manifest.json')
-        self.path=os.path.normcase(os.path.abspath(self.manifest['game']))
+        self.path=os.path.normcase(os.path.abspath(self.manifest['game'])) if self.manifest.get('game') else None
     def close(self):
         if self.handle:k.CloseHandle(self.handle)
         self.handle=None;self.window=None;self.identity=None
@@ -64,6 +64,7 @@ class ReadOnlyGame:
         return False
     def discover(self):
         """Find a new session after a plain EXE launch, without a controller call."""
+        if not self.path:return None
         ids=(W.DWORD*8192)();needed=W.DWORD();matches=[]
         if not p.EnumProcesses(ids,C.sizeof(ids),C.byref(needed)):raise OSError('Cannot enumerate game')
         for pid in ids[:needed.value//4]:
@@ -77,11 +78,16 @@ class ReadOnlyGame:
         if len(matches)>1:raise OSError('More than one matching game; HUD will wait')
         return matches[0] if matches else None
     def bind(self):
-        if self.alive():return True
+        hint=ui.read_json(ui.RUNTIME/'game.json')
+        if self.alive():
+            current=ui.hud_identity(self.manifest,hint,self.identity['pid'],self.identity['session_id'])
+            if current==self.identity:return True
         self.close()
         now=time.monotonic()
         if now-self.last_search<1:return False
         self.last_search=now
+        self.manifest=ui.read_json(ui.ROOT/'bridge-manifest.json')
+        self.path=os.path.normcase(os.path.abspath(self.manifest['game'])) if self.manifest.get('game') else None
         pid=self.discover()
         if pid is None:return False
         if hashlib.sha256(Path(self.path).read_bytes()).hexdigest()!=self.manifest['sha256']:
@@ -95,9 +101,10 @@ class ReadOnlyGame:
             times=[W.FILETIME() for _ in range(4)]
             if not k.GetProcessTimes(self.handle,*[C.byref(t) for t in times]):raise OSError('Cannot identify game')
             created=(times[0].dwHighDateTime<<32)|times[0].dwLowDateTime
-            if self.read(self.manifest['data_va'],8)!=b'PZCT'+struct.pack('<I',self.manifest['version']):
+            identity=ui.hud_identity(self.manifest,hint,pid,'%s:%s'%(pid,created))
+            if self.read(identity['data_va'],8)!=b'PZCT'+struct.pack('<I',self.manifest['version']):
                 raise OSError('Game bridge does not match')
-            self.identity=dict(pid=pid,session_id='%s:%s'%(pid,created),game=self.manifest['game'],data_va=self.manifest['data_va'])
+            self.identity=identity
             ui.write_json(ui.RUNTIME/'game.json',self.identity)
             return True
         except Exception:self.close();raise

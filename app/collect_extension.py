@@ -66,6 +66,8 @@ def fallback(ctl,base):
     return at,original
 
 def verify(ctl,base,actual):
+    from background_extension import unwrap
+    actual=unwrap(ctl,base,actual)
     if actual==base:return False
     file=record_path(ctl)
     if not file.exists():raise ValueError('Unrecognized live bridge code')

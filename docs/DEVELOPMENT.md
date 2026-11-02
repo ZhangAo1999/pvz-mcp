@@ -7,6 +7,7 @@
 | `app/mcp-server.mjs` | MCP 接口、参数校验和后端通信 |
 | `app/pvz.py` | Win32 控制后端、场景与动作逻辑 |
 | `app/runtime_bridge.py` | EXE 识别、进程启动与运行时桥接加载 |
+| `app/discovery.py`、`app/attach.py` | 只读发现进程、校验并接入已有游戏；短暂挂起线程、重定位与失败回滚 |
 | `app/bridge_asm.py` | 当前构建的桥接汇编、地址和调用逻辑 |
 | `app/guidance.py`、`app/interaction.py` | 上手帮助、当前阶段提示及对话/教学状态读取 |
 | `app/state.py` | 游戏对象与 JSON 状态解码 |
@@ -22,13 +23,14 @@
 
 已验证的环境为 Windows x64、Node.js 24 和包含 tkinter 的 Python 3.8。Node.js 至少需要 20.3，更新检查的代理功能需要 24.5 或更新版本；其他运行时版本需要自行验证。
 
-在仓库根目录执行，替换 Python 和游戏路径：
+在仓库根目录执行，替换 Python 路径。游戏路径配置可省略，自行打开游戏后由 MCP 自动发现：
 
 ```powershell
 npm install --ignore-scripts
 $env:PVZ_DATA_DIR = 'D:\PvZ-MCP-Dev\data'
 $env:PVZ_PYTHON = 'D:\Programs\Python\python.exe'
 $env:PYTHONPYCACHEPREFIX = 'D:\PvZ-MCP-Dev\cache\python'
+# 可选，仅用于记住 MCP 代为启动游戏的路径：
 & $env:PVZ_PYTHON .\app\configure.py 'D:\Games\PvZ\PlantsVsZombies.exe'
 ```
 
@@ -124,3 +126,11 @@ $env:PVZ_BUILD_SDK = Join-Path $PWD 'node_modules'
 ```
 
 EXE 提供 `--self-test 报告路径`，检查嵌入资源与兼容性分类，并输出界面预览。安装回归测试可使用 `--test-install 目标目录 游戏EXE或none 报告路径`；该测试入口只允许写入 `D:\Temp\Codex` 下的测试目录。测试不启动游戏。
+
+### 桌面控制面板
+
+`app/control_panel.py` 使用随包 Python 的 Tkinter；可直接使用项目运行环境启动该脚本。单个后台工作线程调用现有 Controller，主线程只处理界面。等待游戏时每秒查询 `status`，进入已接入棋盘后改为约 250 毫秒查询并追加 `observe`；不自动接入、不暂停推进。`observe` 验证读取前后 Board/App 心跳、命令序号、busy 状态、棋盘指针及 epoch，无法取得一致数据时拒绝返回。本接口不发送游戏命令、不改变推进预算；原 `get_state` 继续提供暂停决策语义。游戏操作绑定已观察到的会话和棋盘 epoch，过期指令交由控制器拒绝。
+
+`packaging/ControlLauncher.cs` 在打包时编译为 `PvZ-MCP-Control.exe`，安装到稳定入口。它每次读取 `active.json` 并启动该版本的 `pythonw.exe`；共享安装目录的 `data`，更新和回退不需要改快捷方式。源码仓库不保存生成的 EXE。安装器完成页和 `Manage.ps1 -Action Panel` 均可打开面板。
+
+`background_extension.py` 延伸已验证桥接的 App 更新调用，沿用旧桥接布局，无需重启游戏。安装时挂起并检查线程指令位置；运行时在主线程调用当前构建的 `LawnApp::KillDialog(19)` (`0x45e910`)，由原生代码恢复焦点和暂停状态。只处理失焦暂停对话，其他菜单返回 `NATIVE_MENU_OPEN`。MCP 暂停指令由 App 层确认，即使原生模态阻止 Board 更新仍可响应。该扩展与拾取扩展分别校验，可以共存；游戏 EXE 和存档不受修改。

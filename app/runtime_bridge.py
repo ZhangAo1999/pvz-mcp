@@ -1,7 +1,7 @@
 """Launch an exact supported original EXE with a process-local bridge.
 
-Only a newly created, suspended process is patched, before its first instruction.
-Never patches an existing running game, writes an EXE, or bypasses DRM.
+Launch patches a newly created suspended process. Existing-process attachment
+is implemented separately in attach.py. Neither path writes a game EXE/save.
 """
 import ctypes as C
 from ctypes import wintypes as W
@@ -36,9 +36,15 @@ class STARTUPINFO(C.Structure):
 class PROCESSINFO(C.Structure):
     _fields_=[('hProcess',W.HANDLE),('hThread',W.HANDLE),('pid',W.DWORD),('tid',W.DWORD)]
 
+def sun_stub(stub_address):
+    stub=bytearray.fromhex('9c60837858040f8247000000837858060f873d000000807838000f8533000000807850000f852900000083783c000f851f0000008b1083ba20090000030f85100000008bd0e826f2beff8b4c241ce8ede6beff619d83ec20538bd8e9b6dbbeff')
+    for pos,destination in [(70,0x43e270),(79,0x43d740),(92,0x43cc16)]:
+        struct.pack_into('<i',stub,pos,destination-(stub_address+pos+4))
+    return bytes(stub)
+
 def launch(path,manifest,verify_only=False):
     checked=inspect_game(path)
-    if manifest['sha256']!=checked['sha256'] or manifest['code_va']!=checked['code_va']:
+    if manifest['sha256']!=checked['sha256']:
         raise ValueError('Installed adapter configuration differs; run Configure again')
     k=C.WinDLL('kernel32',use_last_error=True)
     k.CreateProcessW.argtypes=[W.LPCWSTR,W.LPWSTR,W.LPVOID,W.LPVOID,W.BOOL,W.DWORD,
@@ -87,10 +93,7 @@ def launch(path,manifest,verify_only=False):
             target=0x43cc10;expected=bytes.fromhex('83ec20538bd8');stub_address=address+0xe00
             if read(target,6)!=expected:raise ValueError('Sun update signature differs')
             # Same native sound/collection sequence, recalculated for this process allocation.
-            stub=bytearray.fromhex('9c60837858040f8247000000837858060f873d000000807838000f8533000000807850000f852900000083783c000f851f0000008b1083ba20090000030f85100000008bd0e826f2beff8b4c241ce8ede6beff619d83ec20538bd8e9b6dbbeff')
-            for pos,destination in [(70,0x43e270),(79,0x43d740),(92,0x43cc16)]:
-                struct.pack_into('<i',stub,pos,destination-(stub_address+pos+4))
-            write(stub_address,bytes(stub))
+            write(stub_address,sun_stub(stub_address))
             write(target,b'\xe9'+struct.pack('<i',stub_address-target-5)+b'\x90',True)
         for target,expected,label in hooks:
             patch=b'\xe9'+struct.pack('<i',assembled['labels'][label]-target-5)+b'\x90'*(len(expected)-5)

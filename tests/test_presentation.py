@@ -75,6 +75,15 @@ class PresentationTests(unittest.TestCase):
                 self.assertEqual(ctl.execute('place_plant',{}),result)
                 dispatch.assert_called_once()
             self.assertEqual(json.loads((root/'logs'/'commands.jsonl').read_text(encoding='utf-8').splitlines()[-1])['phase'],'complete')
+    def test_hud_uses_relocated_bridge_only_for_matching_session(self):
+        manifest=dict(game=r'D:\Game\PlantsVsZombies.exe',data_va=0x851000)
+        hint=dict(pid=42,session_id='42:123',game=manifest['game'],data_va=0x1201000)
+        self.assertEqual(ui.hud_identity(manifest,hint,42,'42:123')['data_va'],0x1201000)
+        self.assertEqual(ui.hud_identity(manifest,hint,42,'42:456')['data_va'],0x851000)
+        hint['game']=r'D:\Other\PlantsVsZombies.exe'
+        self.assertEqual(ui.hud_identity(manifest,hint,42,'42:123')['data_va'],0x851000)
+        hint.update(game=manifest['game'],data_va=-1)
+        self.assertEqual(ui.hud_identity(manifest,hint,42,'42:123')['data_va'],0x851000)
     def test_shared_readers_do_not_block_windows_atomic_replacement(self):
         with Artifacts(dir=r'D:\Temp\Codex\PvZ-Toolset') as folder:
             target=Path(folder)/'stress.json';ui.write_json(target,dict(index=0));stop=threading.Event();errors=[]

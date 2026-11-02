@@ -12,15 +12,8 @@ $package = Get-Content -LiteralPath (Join-Path $packageRoot 'release.json') -Raw
 if ($package.version -notmatch '^\d+\.\d+\.\d+(-[a-z0-9.]+)?$') { throw 'Invalid package version' }
 $InstallDir = [IO.Path]::GetFullPath($InstallDir)
 if ($InstallDir -eq [IO.Path]::GetPathRoot($InstallDir)) { throw 'Select a dedicated installation folder' }
-if (!(Test-Path -LiteralPath (Join-Path $InstallDir 'data\bridge-manifest.json')) -and !$GamePath -and !$InstallToolsOnly) {
-    if ($NonInteractive) { throw 'GamePath is required for first installation' }
-    Add-Type -AssemblyName System.Windows.Forms
-    $dialog = New-Object System.Windows.Forms.OpenFileDialog
-    $dialog.Title = 'Select your own PlantsVsZombies.exe (supported original 1.2.0.1073)'
-    $dialog.Filter = 'Game executable|*.exe'
-    if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { throw 'Installation canceled' }
-    $GamePath = $dialog.FileName
-}
+# GamePath is an optional convenience for launching a closed game. Running
+# supported processes are discovered and verified by the MCP at connection time.
 # Verify every distributed payload file before copying or running a bundled executable.
 $payload = [IO.Path]::GetFullPath((Join-Path $packageRoot 'payload'))
 $listed = @{}
@@ -79,6 +72,7 @@ if (Test-Path -LiteralPath $active) {
 } else { $previous = $null }
 Copy-Item -LiteralPath (Join-Path $packageRoot 'mcp.mjs') -Destination (Join-Path $InstallDir 'mcp.mjs') -Force
 Copy-Item -LiteralPath (Join-Path $packageRoot 'Manage.ps1') -Destination (Join-Path $InstallDir 'Manage.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $target 'PvZ-MCP-Control.exe') -Destination (Join-Path $InstallDir 'PvZ-MCP-Control.exe') -Force
 $next = @{version=$package.version;previous=$previous;installed_at=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json
 [IO.File]::WriteAllText(($active+'.new'),$next,(New-Object Text.UTF8Encoding($false)))
 if (Test-Path -LiteralPath $active) { [IO.File]::Replace(($active+'.new'),$active,($active+'.previous')) }
@@ -89,6 +83,6 @@ Write-Host ('Installed '+$package.version+' at '+$InstallDir)
 Write-Host ('Import '+(Join-Path $InstallDir 'mcp-config.json')+' in your MCP client, then reconnect.')
 Write-Host 'No game, save or existing MCP client configuration was modified.'
 if (!(Test-Path -LiteralPath (Join-Path $InstallDir 'data\bridge-manifest.json'))) {
-    Write-Host 'Tools installed without an active game. Game control remains disabled until a supported EXE is configured.'
+    Write-Host 'Open your own supported game normally, then connect with pvz_attach. No game path configuration is required.'
 }
 if (!$NonInteractive) { Read-Host 'Press Enter to finish' | Out-Null }

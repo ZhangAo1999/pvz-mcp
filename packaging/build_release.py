@@ -37,6 +37,8 @@ def build(destination):
     bundle=destination/('PvZ-MCP-'+VERSION+'-windows-x64')
     if bundle.exists():raise ValueError('Build folder exists; use a new output directory or version')
     payload=bundle/'payload';payload.mkdir(parents=True)
+    from build_control_launcher import build_control_launcher
+    build_control_launcher(payload/'PvZ-MCP-Control.exe')
     shutil.copy2(str(SOURCE/'package.json'),str(payload/'package.json'))
     for name in ['LICENSE','NOTICE','THIRD-PARTY-NOTICES.txt']:
         shutil.copy2(str(SOURCE/name),str(payload/name))

@@ -22,7 +22,7 @@ try {
   report.checks.push('initialize/connect');
   const catalog = await client.listTools();
   const names = catalog.tools.map(tool => tool.name).sort();
-  assert.deepEqual(names, ['pvz_help', 'pvz_continue_dialogue', 'pvz_shovel', 'pvz_launch_game', 'pvz_list_modes', 'pvz_start_game', 'pvz_return_to_menu', 'pvz_status', 'pvz_get_state', 'pvz_pause', 'pvz_advance', 'pvz_resume', 'pvz_select_seeds', 'pvz_can_place', 'pvz_place_plant', 'pvz_collect', 'pvz_read_letter', 'pvz_set_presentation', 'pvz_admin_set_sun', 'pvz_admin_set_progress', 'pvz_set_commentary', 'pvz_get_save_info', 'pvz_check_update'].sort());
+  assert.deepEqual(names, ['pvz_help', 'pvz_list_games', 'pvz_attach', 'pvz_continue_dialogue', 'pvz_shovel', 'pvz_launch_game', 'pvz_list_modes', 'pvz_start_game', 'pvz_return_to_menu', 'pvz_status', 'pvz_observe', 'pvz_get_state', 'pvz_pause', 'pvz_advance', 'pvz_resume', 'pvz_select_seeds', 'pvz_can_place', 'pvz_place_plant', 'pvz_collect', 'pvz_read_letter', 'pvz_set_presentation', 'pvz_admin_set_sun', 'pvz_admin_set_progress', 'pvz_set_commentary', 'pvz_get_save_info', 'pvz_check_update'].sort());
   assert.equal(catalog.tools.find(tool => tool.name === 'pvz_status').annotations.readOnlyHint, true);
   report.tools = names;
   const help = await client.callTool({name:'pvz_help',arguments:{}});
@@ -45,7 +45,7 @@ try {
   assert.ok(catalog.tools.find(tool => tool.name === 'pvz_admin_set_progress').inputSchema.required.includes('expected_save_sha256'));
   assert.ok(catalog.tools.find(tool => tool.name === 'pvz_admin_set_progress').inputSchema.required.includes('expected_session_id'));
   assert.equal(catalog.tools.find(t => t.name === 'pvz_check_update').annotations.openWorldHint, true);
-  report.checks.push('all 23 tools, update check, session guards, async advance and guarded progress edit schemas listed');
+  report.checks.push('all 26 tools, update check, session guards, async advance and guarded progress edit schemas listed');
   const response = await client.callTool({ name: 'pvz_status', arguments: {} });
   assert.ok(!response.isError, JSON.stringify(response));
   report.status = response.structuredContent ?? JSON.parse(response.content.find(item => item.type === 'text').text);

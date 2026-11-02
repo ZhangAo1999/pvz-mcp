@@ -116,6 +116,7 @@ sealed class SetupForm : Form
     readonly Button install = new Button();
     readonly Button close = new Button();
     readonly Button openFolder = new Button();
+    readonly Button openPanel = new Button();
     readonly CheckBox toolsOnly = new CheckBox();
     readonly List<Control> fields = new List<Control>();
     readonly string version;
@@ -171,11 +172,11 @@ sealed class SetupForm : Form
         installPath.Text = Directory.Exists(@"D:\") ? @"D:\Programs\PvZ-MCP" : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "PvZ-MCP");
         var browseInstall = BrowseButton(140);
         browseInstall.Click += delegate { using (var d = new FolderBrowserDialog { Description = "选择工具安装目录", SelectedPath = installPath.Text }) if (d.ShowDialog(this) == DialogResult.OK) { installPath.Text = d.SelectedPath; LoadPreviousGame(); } };
-        AddLabel("游戏程序（PlantsVsZombies.exe）", 30, 194, 650, 24, Color.Black);
+        AddLabel("游戏程序（选填，仅用于 MCP 代为启动游戏）", 30, 194, 650, 24, Color.Black);
         ConfigurePath(gamePath, 222);
         var browseGame = BrowseButton(222);
         browseGame.Click += delegate { using (var d = new OpenFileDialog { Title = "选择游戏 EXE", Filter = "游戏程序 (*.exe)|*.exe" }) if (d.ShowDialog(this) == DialogResult.OK) { toolsOnly.Checked = false; gamePath.Text = d.FileName; } };
-        toolsOnly.Text = "暂不选择游戏，只安装工具（已有游戏配置会保留）";
+        toolsOnly.Text = "自动发现已打开的游戏（推荐，无需选择游戏路径）";
         toolsOnly.SetBounds(30, 264, 650, 28); Controls.Add(toolsOnly); fields.Add(toolsOnly);
         compatibility.SetBounds(30, 310, 650, 30); compatibility.Font = new Font(Font.FontFamily, 12F, FontStyle.Bold); Controls.Add(compatibility);
         compatibilityDetail.SetBounds(30, 347, 650, 72); Controls.Add(compatibilityDetail);
@@ -185,8 +186,11 @@ sealed class SetupForm : Form
         close.Text = "关闭"; close.SetBounds(560, 528, 120, 36); Controls.Add(close); close.Click += delegate { Close(); };
         openFolder.Text = "打开安装目录"; openFolder.SetBounds(30, 528, 150, 36); openFolder.Visible = false; Controls.Add(openFolder);
         openFolder.Click += delegate { Process.Start(new ProcessStartInfo(installPath.Text) { UseShellExecute = true }); };
+        openPanel.Text = "打开控制面板"; openPanel.SetBounds(194, 528, 150, 36); openPanel.Visible = false; Controls.Add(openPanel);
+        openPanel.Click += delegate { Process.Start(new ProcessStartInfo(Path.Combine(installPath.Text, "PvZ-MCP-Control.exe")) { UseShellExecute = true }); };
         gamePath.TextChanged += async delegate { await ValidateGame(); };
         toolsOnly.CheckedChanged += async delegate { gamePath.Enabled = !toolsOnly.Checked; browseGame.Enabled = !toolsOnly.Checked; await ValidateGame(); };
+        toolsOnly.Checked = true;
         install.Click += async delegate { await Install(); };
         FormClosing += delegate(object sender, FormClosingEventArgs e) { if (busy) e.Cancel = true; };
         Shown += delegate { if (!validationDisabled) LoadPreviousGame(); };
@@ -221,19 +225,19 @@ sealed class SetupForm : Form
         {
             compatibility.Text = "✓ 已验证可用  ·  " + fileVersion;
             compatibility.ForeColor = Color.FromArgb(24, 128, 70);
-            compatibilityDetail.Text = "EXE 校验通过，安装后可通过 MCP 启动游戏并加载桥接。\n请在 AI 客户端导入安装目录中的 mcp-config.json。";
+            compatibilityDetail.Text = "EXE 校验通过，可记住此路径供 MCP 启动游戏。也可自行先开游戏再连接。\n请在 AI 客户端导入安装目录中的 mcp-config.json。";
         }
         else if (state == "unsupported" || state == "unknown")
         {
             compatibility.Text = (state == "unsupported" ? "不支持此构建" : "尚未验证此构建") + (fileVersion.Length == 0 ? "" : "  ·  " + fileVersion);
             compatibility.ForeColor = Color.FromArgb(173, 79, 24);
-            compatibilityDetail.Text = "可以继续安装工具，但不会为这个游戏加载桥接，游戏控制保持禁用。\n安装后可重新运行安装器，选择受支持的游戏。已有游戏配置会先备份。";
+            compatibilityDetail.Text = "可以安装工具，但不会连接这个不受支持的 EXE。\n安装后打开受支持的原版游戏即可自动发现；已有路径配置会先备份。";
         }
         else
         {
-            compatibility.Text = "只安装工具";
+            compatibility.Text = "自动发现游戏";
             compatibility.ForeColor = Color.FromArgb(50, 80, 120);
-            compatibilityDetail.Text = "未选择游戏时也可以安装。选择受支持的 EXE 后才能控制游戏。\n当前仅支持已验证哈希的 1.2.0.1073，其他版本不会强行加载。";
+            compatibilityDetail.Text = "安装后自行打开游戏，MCP 会自动寻找并连接，无需在这里选择路径。\n当前仅支持已验证哈希的 1.2.0.1073；多个游戏同时运行时需选择进程。";
         }
     }
     async Task ValidateGame()
@@ -276,7 +280,7 @@ sealed class SetupForm : Form
             if (selectedGame.Length > 0 && String.Equals(destination, Path.GetDirectoryName(Path.GetFullPath(selectedGame)), StringComparison.OrdinalIgnoreCase)) throw new IOException("请将工具安装在独立目录，不要选择游戏文件所在目录。");
         }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "检查安装位置", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
-        busy = true; install.Enabled = false; close.Enabled = false; openFolder.Visible = false;
+        busy = true; install.Enabled = false; close.Enabled = false; openFolder.Visible = false; openPanel.Visible = false;
         foreach (Control c in fields) c.Enabled = false;
         string staging = null;
         try
@@ -304,9 +308,9 @@ sealed class SetupForm : Form
             });
             if (code != 0) throw new IOException("安装失败。请查看日志：\n" + logPath);
             bool configured = File.Exists(Path.Combine(destination, "data", "bridge-manifest.json"));
-            activity.Text = configured ? "安装完成。将 mcp-config.json 加入 AI 客户端，重新连接后从 MCP 启动游戏。" : "工具安装完成，尚未配置可用游戏。可重新运行安装器选择受支持的 EXE。";
+            activity.Text = "安装完成。导入 mcp-config.json，自行打开受支持的游戏后即可自动发现并连接。";
             progress.Style = ProgressBarStyle.Blocks; progress.Value = 100;
-            installPath.Text = destination; openFolder.Visible = true; install.Text = "已完成";
+            installPath.Text = destination; openFolder.Visible = true; openPanel.Visible = true; install.Text = "已完成";
             LastInstallSucceeded = true;
         }
         catch (Exception ex)

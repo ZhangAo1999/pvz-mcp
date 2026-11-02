@@ -1,5 +1,5 @@
 """Local Win32 PvZ controller. JSON lines for MCP, or CLI: pvz.py METHOD JSON.
-No network listener, remote thread, or process suspension. Native commands run
+No network listener or remote thread. Attachment briefly freezes verified target threads; native commands run
 on the game's App/Board update thread through the version-pinned mailbox patch.
 """
 import ctypes as C
@@ -71,18 +71,28 @@ class Controller:
         config=DATA/'bridge-manifest.json'
         self.manifest=json.loads(config.read_text(encoding='utf-8')) if config.exists() else None
         self.path=os.path.normcase(os.path.abspath(self.manifest['game'])) if self.manifest else None
+        self.configured_game=self.path
         self.base=self.manifest['data_va'] if self.manifest else None
         self.M=self.manifest['mailbox'] if self.manifest else {}
         self.identity=None
-    def launch(self):
+    def discover(self,pid=None):
+        from discovery import enumerate_games
+        return enumerate_games(self.path,pid)
+    def launch(self,game_path=None):
+        if game_path:
+            from runtime_bridge import inspect_game
+            try:self.manifest=inspect_game(game_path)
+            except (OSError,ValueError) as ex:fail('UNSUPPORTED_GAME',str(ex))
+            self.path=self.manifest['game']
         try:
-            self.connect()
+            self.connect(allow_attach=True)
             try:return dict(launched=False,status=self.status())
             finally:self.close()
         except PvZError as ex:
-            if ex.code!='NOT_RUNNING':raise
-        task_temp=DATA/'temp';task_temp.mkdir(parents=True,exist_ok=True)
-        env=dict(os.environ,TEMP=str(task_temp),TMP=str(task_temp))
+            if ex.code not in ('NOT_RUNNING','UNSUPPORTED_GAME'):raise
+            if ex.code=='UNSUPPORTED_GAME' and not game_path:raise
+        if not self.manifest:
+            fail('GAME_PATH_REQUIRED','Open your game normally and use pvz_attach, or pass game_path to pvz_launch_game. Installation does not require a game path.')
         from runtime_bridge import launch
         launch(self.manifest['game'],self.manifest)
         deadline=time.monotonic()+10
@@ -96,41 +106,57 @@ class Controller:
                 if ex.code not in ['NOT_RUNNING','READ_FAILED','UNSTABLE_STATUS']:raise
             time.sleep(.05)
         fail('LAUNCH_TIMEOUT','Game launch was requested, but the process is not ready')
-    def connect(self):
-        if not self.manifest:
-            fail('GAME_NOT_CONFIGURED','The tools are installed, but no supported game is configured. Run the installer again and select a supported EXE.')
-        if hashlib.sha256(Path(self.path).read_bytes()).hexdigest()!=self.manifest['sha256']:
-            fail('BUILD_MISMATCH','The game executable differs from this controller build')
-        ids=(W.DWORD*4096)();needed=W.DWORD()
-        if not p.EnumProcesses(ids,C.sizeof(ids),C.byref(needed)):fail('ENUM_FAILED','Cannot enumerate game process')
-        matches=[]
-        for pid in ids[:needed.value//4]:
-            h=k.OpenProcess(0x1000,False,pid)
-            if not h:continue
-            try:
-                buf=C.create_unicode_buffer(32768);n=W.DWORD(len(buf))
-                if k.QueryFullProcessImageNameW(h,0,buf,C.byref(n)) and os.path.normcase(buf.value)==self.path:matches.append(pid)
-            finally:k.CloseHandle(h)
-        if len(matches)!=1:fail('NOT_RUNNING' if not matches else 'AMBIGUOUS_PROCESS','Start exactly one copy of '+self.manifest['game'],{'pids':matches})
-        self.pid=matches[0];self.handle=k.OpenProcess(0x438,False,self.pid)
+    def connect(self,allow_attach=False,pid=None,expected_session_id=None):
+        from discovery import select_game
+        from runtime_bridge import inspect_game
+        games=self.discover(pid)
+        try:chosen=select_game(games,pid)
+        except ValueError as ex:fail(str(ex),'Open one supported game, or select pid from pvz_list_games.',dict(games=games))
+        if expected_session_id and expected_session_id!=chosen['session_id']:
+            fail('STALE_SESSION','The selected process changed; discover again',chosen)
+        self.manifest=inspect_game(chosen['game']);self.path=chosen['game']
+        self.pid=chosen['pid'];self.session=chosen['session_id']
+        self.handle=k.OpenProcess(0x438,False,self.pid)
         if not self.handle:fail('OPEN_FAILED','Cannot access the selected game',{'winerror':C.get_last_error()})
         self.mem=Memory(self.handle)
         times=[W.FILETIME() for _ in range(4)]
         if not k.GetProcessTimes(self.handle,*[C.byref(t) for t in times]):self.close();fail('IDENTITY_FAILED','Cannot identify game process')
-        self.session='%d:%d'%(self.pid,(times[0].dwHighDateTime<<32)|times[0].dwLowDateTime)
+        actual='%d:%d'%(self.pid,(times[0].dwHighDateTime<<32)|times[0].dwLowDateTime)
+        if actual!=self.session:self.close();fail('STALE_SESSION','PID was reused; discover again')
+        from attach import record_path
+        record_file=record_path(self.session)
         try:
-            if self.mem.read(self.base,8)!=b'PZCT'+struct.pack('<I',self.manifest['version']):fail('BRIDGE_MISMATCH','The running game has no matching controller bridge. Launch the original game using pvz_launch_game so the runtime bridge is loaded.')
+            if record_file.exists():
+                record=json.loads(record_file.read_text(encoding='utf-8'))
+                if record.get('session_id')!=self.session or record['manifest']['sha256']!=self.manifest['sha256']:
+                    fail('BRIDGE_MISMATCH','Bridge record does not match this process')
+                self.manifest=record['manifest']
+            else:
+                from attach import locate_bridge
+                located=locate_bridge(self)
+                if located:self.manifest=located
+            self.base=self.manifest['data_va'];self.M=self.manifest['mailbox']
+            try:magic=self.mem.read(self.base,8)
+            except PvZError as ex:
+                if ex.code!='READ_FAILED':raise
+                magic=None
+            if magic!=b'PZCT'+struct.pack('<I',self.manifest['version']):
+                if not allow_attach:fail('ATTACH_REQUIRED','Supported game found. Use pvz_attach, or get_state to attach and pause.',chosen)
+                from attach import attach
+                record=attach(self);self.manifest=record['manifest'];self.base=self.manifest['data_va'];self.M=self.manifest['mailbox']
             from bridge_asm import assemble
             from collect_extension import verify
-            # Existing paused games remain readable/collectible across this
-            # upgrade. Only a new launch enables the menu UI subset.
             for legacy in (False,True):
-                code=assemble(legacy=legacy)[0]
+                code=assemble(legacy=legacy,code_address=self.manifest['code_va'],data_address=self.base)[0]
                 try:verify(self,code,self.mem.read(self.manifest['code_va'],len(code)))
-                except ValueError:
-                    continue
+                except ValueError:continue
                 self.bridge_code=code;self.paused_menu_ui=not legacy;break
-            else:fail('BRIDGE_MISMATCH','Unrecognized live bridge code')
+            else:fail('BRIDGE_MISMATCH','Unrecognized live bridge code; no patch was attempted')
+            if allow_attach and os.path.normcase(self.path)!=self.configured_game:
+                # Remember the launch path, never a process-specific allocation.
+                from configure import write_json
+                write_json(DATA/'bridge-manifest.json',inspect_game(self.path))
+                self.configured_game=os.path.normcase(self.path)
             spectator.optional('identity',spectator.identity,self)
         except Exception:self.close();raise
     def close(self):
@@ -152,6 +178,13 @@ class Controller:
             time.sleep(.005)
         fail('TIMEOUT','Game did not acknowledge the command. Bring its window to the foreground and close any game menu; do not blindly retry a placement.',{'mailbox':self.mailbox()})
     def command(self,cmd,arg0=0,arg1=0,arg2=0,epoch=0):
+        if 1<=cmd<=9 and getattr(self,'bridge_code',None):
+            from background_extension import install
+            try:install(self)
+            except (OSError,ValueError) as ex:fail('BACKGROUND_CONTROL_FAILED',str(ex))
+            pending=self.mailbox()
+            if pending['request']!=pending['ack'] and pending['command']==1:
+                self.wait(lambda value:value['request']==value['ack'],timeout=2)
         if cmd>=10:mb=self.mailbox()
         else:b,mb=self.board()
         if mb['request']!=mb['ack']:fail('PENDING_COMMAND','Previous command is still pending; do not overwrite it',{'mailbox':mb})
@@ -161,6 +194,7 @@ class Controller:
         self.mem.put(self.base+self.M['request'],seq)
         mb=self.wait(lambda m:m['ack']==seq and m['busy']==0 and not m.get('app_busy',0))
         errors={1:'UNKNOWN_COMMAND',2:'STALE_BOARD_EPOCH',3:'PAUSE_REQUIRED',4:'NOT_PLAYING',5:'INVALID_ARGUMENT',6:'ILLEGAL_GRID',7:'CARD_UNAVAILABLE',8:'UNSUPPORTED_MODE',9:'CURSOR_BUSY',10:'CARD_SELECTION_FAILED',11:'LOADING',12:'MENU_REQUIRED',13:'NO_PROFILE',14:'NOT_CHOOSING_SEEDS',15:'CHOOSER_BUSY',16:'WRONG_DECK_SIZE',17:'FIXED_SEEDS',18:'SEED_UNAVAILABLE',20:'STALE_ENTITY',21:'UNSUPPORTED_PICKUP',22:'NO_DIALOGUE'}
+        if mb['result']==23:fail('NATIVE_MENU_OPEN','Close the native settings/dialog first, then run the game again')
         if mb['result']:fail(errors.get(mb['result'],'NATIVE_ERROR'),'Game rejected the command',{'native_result':mb['result'],'native_reply':mb['reply'],'board_epoch':mb['epoch'],'request':seq})
         return mb
     def pause(self):return self.command(1)
@@ -219,6 +253,31 @@ class Controller:
                 result['guidance']=guidance.hints(result)
                 return result
         fail('UNSTABLE_SNAPSHOT','Game changed while reading; request a fresh snapshot')
+    def observe(self):
+        """Read a complete board without issuing pause, advance or input commands."""
+        from state import snapshot, StateError
+        keys=('board','epoch','heartbeat','app_heartbeat','request','ack','busy','app_busy')
+        for _ in range(16):
+            try:
+                b,start=self.board()
+                if start.get('busy') or start.get('app_busy'):
+                    time.sleep(.001);continue
+                ctx=interaction.read(self.mem,start['app'],b)
+                result=snapshot(self.mem,b,start['epoch'],conveyor=ctx['conveyor'])
+                present=self.mem.u32(start['app']+0x868)
+                end=self.mailbox()
+            except (StateError,PvZError) as ex:
+                if isinstance(ex,PvZError) and ex.code not in ('READ_FAILED','NO_BOARD','BOARD_CHANGED'):raise
+                current=self.status()
+                if not current.get('scene',{}).get('board_present'):
+                    return dict(board=None,session_id=self.session,status=current,read_only=True)
+                time.sleep(.001);continue
+            if present==b and all(start.get(key,0)==end.get(key,0) for key in keys):
+                result.update(session_id=self.session,board_epoch=start['epoch'],read_only=True,
+                    consistency='unchanged Board and App heartbeat; no pause or game write',
+                    interaction=ctx,coordinate_system='rows and columns are 1-based; x/y are native pixels')
+                return result
+        fail('UNSTABLE_SNAPSHOT','Game changed during read-only observation; retry without pausing')
     def status(self):
         last=None
         for _ in range(12):
@@ -260,7 +319,7 @@ class Controller:
             n=scene_info['profile_adventure_level'];scene_info['profile_adventure_stage']='%d-%d'%((n-1)//10+1,(n-1)%10+1)
         replay=selection.current(self)
         if replay:scene_info['replay_context']=dict(selected_level=replay['selected_level'],retained_progress_level=replay['original_level'])
-        return dict(running=True,pid=self.pid,session_id=self.session,game=self.manifest['game'],game_build=self.manifest['sha256'],bridge=mb,
+        return dict(running=True,attached=True,pid=self.pid,session_id=self.session,game=self.manifest['game'],game_build=self.manifest['sha256'],bridge=mb,
             paused_menu_ui=getattr(self,'paused_menu_ui',False),
             award=rewards.award_info(scene,mode,scene_info.get('profile_adventure_level')),
             interaction=interaction.read(self.mem,app,board) if current_board else {},
@@ -498,6 +557,7 @@ class Controller:
     def dispatch(self,method,params):
         if method=='help':return guidance.help_info()
         if method=='status':return self.status()
+        if method=='attach':return dict(attached=True,status=self.status())
         if method=='get_save_info':return self.get_save_info()
         if method=='read_letter':
             current=self.state()
@@ -519,6 +579,7 @@ class Controller:
         if method=='start_game':return self.start_level(params)
         if method=='select_seeds':return self.select_seeds(params)
         if method=='get_state':return self.state()
+        if method=='observe':return self.observe()
         if method=='pause':
             if self.status()['scene']['board_attached']:self.pause()
             return self.state()
@@ -643,26 +704,28 @@ class Controller:
         if not isinstance(params,dict):fail('INVALID_ARGUMENT','params must be an object')
         if method=='help':return guidance.help_info()
         with exclusive():
+            if method=='list_games':return dict(games=self.discover(params.get('pid')),instruction='Use pvz_attach; choose pid when multiple supported games are running.')
             if method=='launch_game':
-                result=self.launch();spectator.optional('overlay',spectator.ensure_overlay);return result
+                result=self.launch(params.get('game_path'));spectator.optional('overlay',spectator.ensure_overlay);return result
             if method=='list_modes':return self.modes()
-            try:self.connect()
+            try:self.connect(allow_attach=method not in ('status','observe','can_place','get_save_info','set_presentation'),pid=params.get('pid'),expected_session_id=params.get('expected_session_id'))
             except PvZError as ex:
-                if method=='status' and ex.code in ['NOT_RUNNING','NO_BOARD','GAME_NOT_CONFIGURED']:return dict(running=False,reason=ex.code,message=str(ex))
-                if method=='set_presentation' and ex.code in ['NOT_RUNNING','GAME_NOT_CONFIGURED'] and 'expected_session_id' not in params:
+                if method=='status' and ex.code=='ATTACH_REQUIRED':return dict(running=True,attached=False,attachment_required=True,game=ex.details,guidance=dict(next_actions=['pvz_attach'],instruction='Attach to the discovered game; no installer game path is required.'))
+                if method=='status' and ex.code in ['NOT_RUNNING','NO_BOARD','GAME_NOT_CONFIGURED','UNSUPPORTED_GAME','AMBIGUOUS_PROCESS']:return dict(running=False,reason=ex.code,message=str(ex),details=ex.details)
+                if method=='set_presentation' and ex.code in ['NOT_RUNNING','GAME_NOT_CONFIGURED','ATTACH_REQUIRED','UNSUPPORTED_GAME','AMBIGUOUS_PROCESS'] and 'expected_session_id' not in params:
                     return self.set_presentation(params,False)
                 raise
             try:
                 # A persistent MCP connection must reobserve after process restart.
                 if 'expected_session_id' in params and params['expected_session_id']!=self.session:
                     fail('STALE_SESSION','The game process restarted; read fresh state',{'session_id':self.session})
-                if self.identity and self.identity!=self.session and method not in ['status','get_state','pause','start_game','return_to_menu']:
+                if self.identity and self.identity!=self.session and method not in ['status','observe','get_state','pause','start_game','return_to_menu','attach']:
                     fail('SESSION_CHANGED','Game restarted; call get_state before acting')
-                if method in ['get_state','pause','start_game']:self.identity=self.session
-                if method not in ['status','can_place','get_save_info']:spectator.optional('overlay',spectator.ensure_overlay)
+                if method in ['get_state','pause','start_game','attach']:self.identity=self.session
+                if method not in ['status','observe','can_place','get_save_info']:spectator.optional('overlay',spectator.ensure_overlay)
                 command_id=params.get('command_id')
                 if command_id is not None and (not isinstance(command_id,str) or not 1<=len(command_id)<=128):fail('INVALID_ARGUMENT','command_id must have 1..128 characters')
-                mutate=method not in ['status','get_state','can_place','get_save_info']
+                mutate=method not in ['status','observe','get_state','can_place','get_save_info']
                 log=DATA/'logs'/'commands.jsonl'
                 fingerprint=json.dumps([method,{k:v for k,v in params.items() if k!='command_id'}],sort_keys=True,separators=(',',':'))
                 if command_id and log.exists():
@@ -686,7 +749,7 @@ class Controller:
                         append(dict(record,phase='failed',error=dict(code=ex.code,message=str(ex),details=ex.details)))
                     raise
                 spectator.optional('annotation',spectator.annotate,method,result,self.session)
-                if method not in ['status','can_place','get_save_info']:selection.finish_if_left(self)
+                if method not in ['status','observe','can_place','get_save_info']:selection.finish_if_left(self)
                 if mutate:append(dict(record,phase='complete',result=result))
                 return result
             finally:self.close()

@@ -144,6 +144,20 @@ def identity(ctl):
     value=dict(pid=ctl.pid,session_id=ctl.session,game=ctl.manifest['game'],data_va=ctl.base)
     if read_json(RUNTIME/'game.json')!=value:write_json(RUNTIME/'game.json',value)
 
+def hud_identity(manifest,hint,pid,session_id):
+    """Use the controller-verified session allocation, not a fixed launch base.
+
+    A stale PID or another game's hint must never redirect the read-only HUD.
+    The reader additionally validates process creation time and bridge magic.
+    """
+    base=manifest['data_va']
+    if (hint.get('pid')==pid and hint.get('session_id')==session_id and
+            os.path.normcase(hint.get('game',''))==os.path.normcase(manifest['game'])):
+        candidate=hint.get('data_va')
+        if type(candidate) is int and 0x10000<=candidate<0x80000000 and candidate%4==0:
+            base=candidate
+    return dict(pid=pid,session_id=session_id,game=manifest['game'],data_va=base)
+
 def ensure_overlay():
     if not settings()['show_overlay']:return
     RUNTIME.mkdir(parents=True,exist_ok=True)

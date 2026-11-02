@@ -7,7 +7,8 @@ stolen=bytes.fromhex('6aff6815e96e00')
 code_va=CODE_VA
 data_va=DATA_VA
 
-def assemble(legacy=False):
+def assemble(legacy=False,code_address=CODE_VA,data_address=DATA_VA):
+    code_va,data_va=code_address,data_address
     M=dict(heartbeat=12,board=16,epoch=20,busy=24,paused=28,remaining=32,speed=36,
            completed=40,request=44,ack=48,command=52,result=56,arg0=60,arg1=64,
            arg2=68,expected_epoch=72,reply=76,scene=80,stop=84,admin_events=88,auto_pause_play=92,

@@ -1,5 +1,9 @@
-param([ValidateSet('Status','Rollback','CheckUpdate')][string]$Action='Status')
+param([ValidateSet('Status','Rollback','CheckUpdate','Panel')][string]$Action='Status')
 $ErrorActionPreference='Stop'
+if ($Action -eq 'Panel') {
+    Start-Process -FilePath (Join-Path $PSScriptRoot 'PvZ-MCP-Control.exe') -WindowStyle Hidden
+    exit
+}
 $file=Join-Path $PSScriptRoot 'active.json'
 $active=Get-Content -LiteralPath $file -Raw | ConvertFrom-Json
 if ($Action -eq 'CheckUpdate') {
